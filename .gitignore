@@ -1,0 +1,9 @@
+.venv/
+.gemini/
+
+__pycache__
+*.pyc
+.env
+IMPLEMENTATION_PLAN.md
+DeepUnderstanding.md
+SIMPCODE_SDD_v3.md
