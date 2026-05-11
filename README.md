@@ -1,7 +1,7 @@
 # SimpCode — High-Integrity Agentic Engineering Assistant
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/fahadazizz/simpcode/main/assets/logo.png" width="200" alt="SimpCode Logo">
+  <img src="logo.png" width="200" alt="SimpCode Logo">
 </p>
 
 SimpCode is not just another coding assistant. It is a **task-oriented orchestrator** designed to automate complex engineering missions while maintaining absolute architectural truth.
