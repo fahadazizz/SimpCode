@@ -5,6 +5,7 @@ from simpcode.wiki.navigator import WikiNavigator
 from simpcode.harness.budgeter import ContextBudgeter, ContextItem
 from simpcode.core.llm import LLMClient
 from simpcode.wiki.models import WikiPage
+from simpcode.core.skills import SkillLoader, SkillSelector
 
 class ScanScene:
     """
@@ -16,6 +17,8 @@ class ScanScene:
         self.wiki = WikiEngine(root)
         self.navigator = WikiNavigator(llm)
         self.budgeter = ContextBudgeter(model=llm.model_id)
+        self.skill_loader = SkillLoader(root)
+        self.skill_selector = SkillSelector(llm)
 
     def run(self, task: str) -> str:
         # 1. Load Ground-Truth Context (Mandatory)
@@ -29,6 +32,13 @@ class ScanScene:
         index_content = index_page.content if index_page else "# No index found"
         mandatory.append(ContextItem(id="index.md", content=index_content, priority=1))
         
+        # 1.5 Load Relevant Skills
+        available_skills = self.skill_loader.load_all_skills()
+        selected_skills = self.skill_selector.select(task, available_skills)
+        for skill in selected_skills:
+            print(f"  [Scan] Selected Skill: {skill.metadata.id} - {skill.metadata.description}")
+            mandatory.append(ContextItem(id=f"SKILL: {skill.metadata.id}", content=skill.content, priority=1))
+
         # 2. Multi-Pass Strategic Navigation
         loaded_page_ids: Set[str] = set()
         semantic_items: List[ContextItem] = []

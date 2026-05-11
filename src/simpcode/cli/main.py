@@ -4,6 +4,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+from rich.markdown import Markdown
 from dotenv import load_dotenv
 
 # Production Readiness: Load environment early
@@ -99,10 +100,12 @@ def init():
 
 @cli.command()
 @click.argument('question')
-def ask(question):
+@click.option('--provider', help="Override global LLM provider.")
+@click.option('--model', help="Override global LLM model ID.")
+def ask(question, provider, model):
     """Scan Scene: Query the codebase using Wiki context (Read-Only)."""
     root = get_project_root()
-    llm = LLMClient()
+    llm = LLMClient(provider=provider, model_id=model)
     scanner = ScanScene(root, llm)
     
     try:
@@ -113,7 +116,7 @@ def ask(question):
             instruction = registry.load("research_assistant")
             response = llm.chat([{"role": "user", "content": f"CONTEXT:\n{context}\n\nQUERY: {question}"}], instruction)
         
-        console.print(Panel(response, title="SimpCode Analysis", border_style="green"))
+        console.print(Panel(Markdown(response), title="SimpCode Analysis", border_style="green"))
     except Exception as e:
         console.print(f"[bold red]Query Error:[/bold red] {e}")
 
@@ -121,10 +124,12 @@ def ask(question):
 @click.argument('task')
 @click.option('--yes', is_flag=True, help="Autonomous mode: Skip approval gate.")
 @click.option('--dry-run', is_flag=True, help="Think Through only: Generate plan without execution.")
-def do(task, yes, dry_run):
+@click.option('--provider', help="Override global LLM provider.")
+@click.option('--model', help="Override global LLM model ID.")
+def do(task, yes, dry_run, provider, model):
     """Full Lifecycle: Execute a task with reasoning, planning, and verification."""
     root = get_project_root()
-    llm = LLMClient()
+    llm = LLMClient(provider=provider, model_id=model)
     scanner = ScanScene(root, llm)
     planner = PlanGenerator(llm, scanner)
     permissions = PermissionSystem(console)
@@ -306,9 +311,11 @@ def recover():
 from simpcode.cli.shell import SimpShell
 
 @cli.command()
-def chat():
+@click.option('--provider', help="Override global LLM provider.")
+@click.option('--model', help="Override global LLM model ID.")
+def chat(provider, model):
     """Interactive TUI session mode."""
-    shell = SimpShell()
+    shell = SimpShell(provider=provider, model_id=model)
     shell.run()
 
 def main():

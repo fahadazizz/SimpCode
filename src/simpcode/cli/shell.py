@@ -27,10 +27,10 @@ class SimpShell:
     SimpCode Interactive TUI: The primary interface for real-time engineering.
     Implements a full state machine from Mission to Reflection.
     """
-    def __init__(self):
+    def __init__(self, provider: Optional[str] = None, model_id: Optional[str] = None):
         self.console = Console()
         self.root = get_project_root()
-        self.llm = LLMClient()
+        self.llm = LLMClient(provider=provider, model_id=model_id)
         self.session_id = f"shell_{int(time.time())}"
         
         # UI State
@@ -99,4 +99,4 @@ class SimpShell:
             instruction = registry.load("interactive_assistant")
             response = self.llm.chat([{"role": "user", "content": f"Context:\n{context}\n\nUser: {user_input}"}], instruction)
         
-        self.console.print(f"\n[bold green]SimpCode:[/bold green] {response}\n")
+        self.console.print(Panel(Markdown(response), title="SimpCode", border_style="green"))

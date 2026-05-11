@@ -35,14 +35,20 @@ class ProjectAnalyzer:
                 file_tree.append(rel_path)
                 
                 # 2. Extract Manifests
-                if p.name in ["pyproject.toml", "package.json", "requirements.txt", "Makefile", "go.mod"]:
+                manifest_names = {"pyproject.toml", "package.json", "requirements.txt", "Makefile", "go.mod", "Cargo.toml", "pom.xml", "build.gradle", "Gemfile"}
+                manifest_exts = {".csproj", ".fsproj", ".sln", ".gemspec", ".gradle"}
+                
+                if p.name in manifest_names or p.suffix in manifest_exts:
                     try:
                         manifests[rel_path] = p.read_text()[:5000] # Limit size
                     except Exception:
                         pass
                 
-                # 3. Extract Entry Point Samples (Common names)
-                if p.name in ["main.py", "app.py", "index.ts", "server.js", "main.go"]:
+                # 3. Extract Entry Point Samples (Common patterns)
+                entry_stems = {"main", "app", "index", "server", "manage", "run", "cli", "bootstrap", "setup"}
+                valid_exts = {".py", ".js", ".ts", ".go", ".rs", ".rb", ".java", ".cpp", ".cs", ".php", ".sh"}
+                
+                if p.stem.lower() in entry_stems and p.suffix.lower() in valid_exts:
                     try:
                         entry_point_samples[rel_path] = p.read_text()[:2000] # Snippet
                     except Exception:
