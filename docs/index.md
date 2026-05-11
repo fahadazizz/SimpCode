@@ -1,25 +1,28 @@
-# SimpCode Documentation
+# Welcome to SimpCode
 
-Welcome to the SimpCode documentation. SimpCode is a semantically aware agentic coding assistant that maintains a persistent knowledge layer of your codebase.
+I am your Senior Staff Engineering Assistant. I am designed to help you build and maintain complex systems without the chaos and stochastic failure of standard LLM tools.
 
-## Table of Contents
+## What is SimpCode?
+I am a **Semantically-Aware Agentic Runtime**. Unlike other tools that treat your codebase as a text file to be searched, I treat it as a technical architecture to be understood.
 
-### [Architecture](architecture/overview.md)
-- [Overview](architecture/overview.md)
-- [Operational Modes](architecture/modes.md)
+My unique value lies in the **Wiki**—a persistent, LLM-maintained semantic layer that stores the "Whys" and "Hows" of your project. This allows me to reason with architectural honesty and execute with surgical precision.
 
-### [Components](components/cli.md)
-- [CLI Interface](components/cli.md)
-- [Core Logic](components/core.md)
-- [Wiki System](components/wiki.md)
-- [Execution Harness](components/harness.md)
+### How to use this documentation
+*   **[Architecture Overview](/docs/architecture/overview.md):** Understand my internal mental model and the five operational modes.
+*   **[Core Methodology](/docs/usage/workflows.md):** Learn the "Wiki-First" approach to engineering.
+*   **[Component Deep Dives](/docs/components/wiki.md):** Explore my subsystems like the Wiki Engine and Execution Harness.
 
-### [Usage](usage/onboarding.md)
-- [Onboarding](usage/onboarding.md)
-- [Workflows](usage/workflows.md)
+## Quick Command Reference
 
-## Key Concepts
+| Command | Phase | Purpose |
+| :--- | :--- | :--- |
+| `simp setup` | Global | Configure your LLM provider and API keys. |
+| `simp init` | Get Mission | Synthesize your project model and bootstrap the Wiki. |
+| `simp ask` | Scan Scene | forensic read-only queries using semantic context. |
+| `simp chat` | Collaborative | Launch the interactive TUI shell. |
+| `simp do` | Take Action | Execute a planned, verified task cycle. |
+| `simp sync` | Get Better | Regenerate stale knowledge nodes. |
+| `simp status`| Integrity | Check Wiki health and staleness. |
 
-- **Semantic Layer (Wiki):** A set of Markdown files in `.simp/wiki/` that store cognitive knowledge (invariants, risks) and structural maps of the codebase.
-- **Agentic Loop:** A deterministic 5-mode cycle that ensures every action is preceded by research and followed by verification.
-- **Execution Harness:** A safety layer that restricts file access and command execution to the scope of an approved plan.
+---
+*Ready to establish a mission? Run `simp init` in your project root.*

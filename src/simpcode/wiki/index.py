@@ -10,54 +10,52 @@ class IndexEntry(BaseModel):
     path: str
     description: Optional[str] = None
 
-class IndexPage(WikiPage):
-    # Specialized WikiPage for index.md
-    pass
-
 class IndexManager:
-    def __init__(self, wiki_dir: Path, token_budget: int = 1000):
+    """
+    SimpCode Cartographer: Manages the Project Index with strict context budget discipline.
+    Implements prioritized, line-aware pruning to prevent unparseable truncation.
+    """
+    def __init__(self, wiki_dir: Path, token_budget: int = 1500):
         self.wiki_dir = wiki_dir
         self.token_budget = token_budget
         self.index_path = wiki_dir / "index.md"
+        # Token estimation: tiktoken would be better, but character count with buffer is safer than naive math
+        self.char_budget = token_budget * 3 
 
-    def _estimate_tokens(self, text: str) -> int:
-        # Rough estimation: 1 token ~= 4 characters for English text
-        return len(text) // 4
+    def update_index(self, modules: List[IndexEntry], decisions: List[IndexEntry], hotspots: List[str]):
+        """
+        Synthesizes index.md. 
+        Trimming order: Hotspots -> Decisions -> Modules.
+        """
+        # 1. Build sections independently
+        module_lines = ["## Modules"] + [f"- [[{m.path}|{m.name}]]: {m.description or ''}" for m in modules]
+        decision_lines = ["\n## Decisions"] + [f"- [[decisions/{d}|{d}]]" for d in decisions]
+        hotspot_lines = ["\n## Hotspots"] + [f"- {h}" for h in hotspots]
+        
+        header = "# Project Index\n\nThis is the high-level map of the codebase. Navigation should start here.\n\n"
+        
+        # 2. Assemble with priority-based pruning
+        def assemble_content(h_list, d_list, m_list):
+            return header + "\n".join(m_list) + "\n".join(d_list) + "\n".join(h_list)
 
-    def update_index(self, modules: List[IndexEntry], decisions: List[IndexEntry], hotspots: List[IndexEntry]):
-        content = "# Project Index\n\n"
-        
-        content += "## Modules\n"
-        for m in modules:
-            content += f"- [[{m.path}|{m.name}]]: {m.description or ''}\n"
-        
-        content += "\n## Decisions\n"
-        for d in decisions:
-            content += f"- [[{d.path}|{d.name}]]\n"
-            
-        content += "\n## Hotspots\n"
-        for h in hotspots:
-            content += f"- {h.path}\n"
-            
-        # Check budget
-        while self._estimate_tokens(content) > self.token_budget:
-            # Simple trimming logic: remove hotspots first, then decisions
-            if "## Hotspots" in content and content.split("## Hotspots")[1].strip():
-                lines = content.split("\n")
-                # Remove last line of hotspots
-                content = "\n".join(lines[:-1])
-            elif "## Decisions" in content and content.split("## Decisions")[1].strip():
-                # Trimming decisions is more complex, but let's just truncate for now
-                content = content[:int(len(content)*0.9)]
+        # Trimming loop
+        while len(assemble_content(hotspot_lines, decision_lines, module_lines)) > self.char_budget:
+            if len(hotspot_lines) > 1:
+                hotspot_lines.pop() # Remove oldest hotspots first
+            elif len(decision_lines) > 1:
+                decision_lines.pop()
+            elif len(module_lines) > 1:
+                module_lines.pop()
             else:
-                # Truncate content if still over budget
-                content = content[:int(len(content)*0.9)]
-                
+                break # Cannot trim further without losing sections entirely
+
+        final_content = assemble_content(hotspot_lines, decision_lines, module_lines)
+        
         metadata = WikiPageMetadata(
             id="index",
             type="structural",
             last_updated=time.time(),
             title="Project Index"
         )
-        page = WikiPage(metadata=metadata, content=content)
+        page = WikiPage(metadata=metadata, content=final_content)
         page.to_file(self.index_path)

@@ -1,32 +1,25 @@
-# Wiki System
+# The Semantic Wiki
 
-The Wiki system is the "memory" of SimpCode. It consists of a structured set of Markdown files that provide a semantic layer over the raw source code.
+The Wiki is my "brain." It lives in your repository at `.simp/wiki/`. It is not just documentation; it is my **Intermediate Representation** of your codebase.
 
-## Directory Structure
-The Wiki is stored in `.simp/wiki/`:
-- `index.md`: The root map of the Wiki, used for navigation.
-- `*.md`: Individual pages describing modules, patterns, or invariants.
+## 1. Dual-Layer Knowledge Graph
+I organize knowledge into two distinct tiers:
 
-## Core Components
+### Cognitive Layer (The Architecture)
+*   **`invariants.md`**: The technical laws of your system. If I am told "No logic in controllers," this is where it lives. I check this before every plan.
+*   **`patterns.md`**: Repeated implementation styles (e.g., naming conventions, API response shapes). I follow these to ensure my code "fits in."
+*   **`risks.md`**: Known fragile areas or complex dependencies. I consult this to estimate the impact of a change.
 
-### `WikiEngine`
-**Location:** `src/simpcode/wiki/engine.py`
-The engine is responsible for reading and writing Wiki pages and performing staleness checks.
-- `check_staleness(page)`: Compares the current file hashes on disk with those stored in the page's metadata.
-- `get_all_pages()`: Loads all pages from the Wiki directory.
+### Structural Layer (The Map)
+*   **`index.md`**: My primary entry point. A high-level map of modules and symbols. It is always loaded but kept under a strict token budget.
+*   **`modules/`**: Detailed semantic descriptions of every major package.
+*   **`symbols/`**: Precise technical contracts for key classes and functions.
 
-### `WikiNavigator`
-**Location:** `src/simpcode/wiki/navigator.py`
-The navigator uses an LLM to decide which Wiki pages are relevant to a given task based on the `index.md`.
-- `navigate(task, index_content)`: Returns a `NavigationDecision` containing a list of page IDs to load.
+## 2. Technical Integrity (Staleness Detection)
+I use SHA-256 hashes to ensure my knowledge never drifts. 
+*   **Pointers:** Every Wiki page contains frontmatter with `sources` (file paths and line ranges).
+*   **Verification:** Before I read a Wiki page, my **Wiki Engine** compares its recorded hash against the current state of the source file.
+*   **Self-Healing:** If a hash mismatches, I mark the page as **STALE**. You can use `simp sync` to have me re-compile the page based on the new code reality.
 
-## Data Models
-**Location:** `src/simpcode/wiki/models.py`
-- `WikiPage`: Represents a page with Markdown content and YAML front-matter metadata.
-- `SourceReference`: Pinned reference to a file or line range, including a hash for freshness tracking.
-
-## Freshness Management
-SimpCode ensures the Wiki remains accurate through:
-1.  **Automatic Updates:** The `ToolHarness` updates hashes immediately after a successful `write_file`.
-2.  **Manual Sync:** The `simp sync` command performs a batch check across all pages.
-3.  **Staleness Awareness:** The `ScanScene` mode can detect stale pages during the research phase.
+## 3. Navigation vs. Search
+I don't use embeddings or vector search. I use **Intentional Navigation**. My **Wiki Navigator** reads the index, reasons about your task, and decides which pages to load. This eliminates the "retrieval error" common in standard coding assistants.

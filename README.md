@@ -1,27 +1,30 @@
-# SimpCode: Semantically Aware Agentic Coding Assistant
+# SimpCode — High-Integrity Agentic Engineering Assistant
 
-SimpCode is a command-line interface (CLI) application designed to facilitate autonomous software engineering tasks through a persistent semantic knowledge layer. By maintaining a structured Wiki of project-specific invariants, architectural patterns, and structural maps, SimpCode ensures that agentic reasoning is grounded in historical context and verified architectural constraints.
+I am SimpCode. I am not a chatbot, a code generator, or a probabilistic search tool. I am a **Senior Staff AI Engineer** built to manage the complexity of production software systems through **Semantic Navigation** and **Harness Engineering**.
 
-## Technical Foundation
+Standard coding assistants start every session blind—they grep files, guess context, and dump token soup into an LLM. This is expensive, architecturally ignorant, and fundamentally unreliable. 
 
-The system is built upon three primary pillars:
+I work differently. I maintain a living knowledge base of your project called the **Wiki**. I consult the Wiki first, reason about your architecture second, and fetch code only when I have a confirmed implementation target. 
 
-1. **Semantic Knowledge Layer:** A persistent Markdown-based Wiki stored in `.simp/wiki/`. This layer provides a cognitive map of the codebase, allowing the assistant to understand high-level intent and cross-module dependencies without requiring exhaustive context window saturation.
-2. **Deterministic Agentic Loop:** A structured five-mode execution cycle (GET MISSION, SCAN SCENE, THINK THROUGH, TAKE ACTION, GET BETTER) that mandates research and planning before any modification is performed.
-3. **Execution Harness:** A security and integrity layer that restricts file system operations and shell execution to the scope of a user-approved plan.
+## My Core Philosophy
 
-## Core Features
+### 1. Wiki-First, Always
+I never read your codebase directly as my first action. I navigate your semantic map to identify **Invariants**, **Patterns**, and **Risks**. Code is fetched only to resolve pointers identified by my reasoning layer.
 
-- **Persistent Context:** Knowledge of business logic and architectural invariants survives between sessions via the Wiki engine.
-- **Staleness Detection:** Automatic verification of Wiki accuracy through file-hash pinning and synchronization.
-- **Plan-Based Execution:** Mandatory step-by-step implementation plans with explicit risk assessment and scope definition.
-- **Deterministic Verification:** Integrated support for automated testing and linting as part of the execution lifecycle.
+### 2. Understand Before Acting
+I do not write code the moment you ask. I perform a multi-pass **Scan Scene** to build situational awareness, followed by a **Think Through** phase where I produce a concrete, surgical implementation plan for your approval.
+
+### 3. Harness Engineering over Prompt Engineering
+My reliability comes from structural constraints. I use a multi-turn **ReAct Loop** that enforces a **Read-Before-Write** invariant. I physically cannot write to files outside of my approved plan, and I mandate inline verification (tests/linting) for every logical unit of change.
+
+## High-Integrity Features
+*   **Universal LLM Engine:** Native SDK support for Google Gemini, Anthropic, OpenAI, Groq, OpenRouter, and Ollama.
+*   **Semantic Wiki:** A dual-layer Markdown graph (.simp/wiki/) that stores cognitive intelligence and structural maps.
+*   **Zero-Stub Architecture:** No placeholders. Every component—from AST-aware symbol parsing to bit-perfect token budgeting—is built for production use.
+*   **Simp-Shell TUI:** A high-fidelity interactive environment for real-time collaborative engineering.
+*   **Deterministic Recovery:** Persisted Plan Artifacts allow me to resume failed or interrupted tasks from the exact point of failure.
 
 ## Installation
-
-Prerequisites:
-- Python 3.9 or higher
-- Access to a supported Large Language Model (LLM) via environment variables
 
 ```bash
 git clone https://github.com/user/simpcode
@@ -29,46 +32,20 @@ cd simpcode
 pip install -e .
 ```
 
-## Command Reference
+## Global Setup
 
-### Project Initialization
+Initialize your global configuration (stored in `~/.simpcode/config.json`):
+
 ```bash
-simp init
+simp setup
 ```
-Analyzes the project structure, detects the technology stack, and generates the foundational intelligence files (`SIMP.md` and `AGENT.md`).
 
-### Knowledge Retrieval
-```bash
-simp ask "Description of the query"
-```
-Performs a read-only analysis of the codebase by navigating the Wiki and assembling relevant local context.
+## The Engineering Lifecycle
 
-### Task Execution
-```bash
-simp do "Description of the task"
-```
-Initiates the full agentic loop: researches the problem space, generates a structured implementation plan, awaits user approval, and executes modifications through the tool harness.
+1.  **Get Mission:** `simp init` — I analyze your repository and synthesize your project model (`SIMP.md`) and behavioral rules (`AGENT.md`).
+2.  **Scan Scene:** `simp ask "How is state managed?"` — I navigate the Wiki to answer forensic queries with cited file:line ranges.
+3.  **Take Action:** `simp chat` or `simp do "task"` — I architect a plan, obtain your approval, and execute surgical edits with inline verification.
+4.  **Get Better:** `simp sync` — I perform self-healing regeneration of my knowledge base to ensure I never drift from the source truth.
 
-### Wiki Synchronization
-```bash
-simp sync
-```
-Performs a batch check of all Wiki references against the current state of the filesystem and updates stale hashes to maintain semantic integrity.
-
-### Health Status
-```bash
-simp status
-```
-Displays a summary of the current Wiki health, tracking pages, and staleness reports.
-
-## Architecture and Documentation
-
-Detailed technical documentation regarding the system architecture, component layers, and internal workflows is available in the `docs/` directory:
-
-- **Architecture:** `docs/architecture/overview.md`
-- **Component Details:** `docs/components/`
-- **Operational Workflows:** `docs/usage/workflows.md`
-
-## License
-
-Refer to the LICENSE file for details on usage and distribution permissions.
+---
+*SimpCode is designed for developers who value architectural honesty and surgical precision.*

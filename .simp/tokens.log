@@ -1,4 +1,4 @@
-{"timestamp": 1778448585.160206, "mode": "llama-3.3-70b-versatile", "input": 222, "output": 48}
-{"timestamp": 1778448585.69238, "mode": "llama-3.3-70b-versatile", "input": 288, "output": 66}
-{"timestamp": 1778448652.3939571, "mode": "llama-3.3-70b-versatile", "input": 228, "output": 48}
-{"timestamp": 1778448653.619382, "mode": "llama-3.3-70b-versatile", "input": 615, "output": 429}
+{"timestamp": "2026-05-11 04:00:02", "model": "llama-3.3-70b-versatile", "input": 2430, "output": 404, "cost_est": 0.003642}
+{"timestamp": "2026-05-11 04:00:04", "model": "llama-3.3-70b-versatile", "input": 2474, "output": 429, "cost_est": 0.003761}
+{"timestamp": "2026-05-11 04:11:09", "model": "llama-3.3-70b-versatile", "input": 2901, "output": 545, "cost_est": 0.004536}
+{"timestamp": "2026-05-11 04:11:11", "model": "llama-3.3-70b-versatile", "input": 2945, "output": 428, "cost_est": 0.004229}

@@ -2,8 +2,12 @@
 .gemini/
 
 __pycache__
+simpcode.egg-info/
+
 *.pyc
 .env
 IMPLEMENTATION_PLAN.md
 DeepUnderstanding.md
 SIMPCODE_SDD_v3.md
+flaws.md
+REMEDIATION_PLAN.md

@@ -1,55 +1,57 @@
 import os
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from pydantic import BaseModel
+from simpcode.utils.paths import PathManager
+from simpcode.core.exclusions import ExclusionFilter
 
-class ProjectInfo(BaseModel):
+class ProjectMetadata(BaseModel):
     name: str
-    stack: List[str]
-    entry_points: List[str]
-    test_commands: List[str]
-    lint_commands: List[str]
-    structure: List[str]
+    root: str
+    file_tree: List[str]
+    manifests: Dict[str, str] # filename -> content
+    entry_point_samples: Dict[str, str] # filename -> first 50 lines
 
 class ProjectAnalyzer:
+    """
+    Collects raw codebase data for LLM synthesis.
+    Does NOT attempt to "understand" the project itself.
+    """
     def __init__(self, root: Path):
         self.root = root
+        self.exclusion_filter = ExclusionFilter(root)
 
-    def analyze(self) -> ProjectInfo:
-        stack = []
-        entry_points = []
-        test_commands = []
-        lint_commands = []
+    def collect_metadata(self) -> ProjectMetadata:
+        file_tree = []
+        manifests = {}
+        entry_point_samples = {}
         
-        # Detect Python
-        if (self.root / "pyproject.toml").exists() or (self.root / "requirements.txt").exists():
-            stack.append("Python")
-            if (self.root / "pytest.ini").exists() or (self.root / "tests").exists():
-                test_commands.append("pytest")
-            else:
-                test_commands.append("python -m unittest")
-            lint_commands.append("flake8")
-            
-        # Detect Node.js
-        if (self.root / "package.json").exists():
-            stack.append("Node.js")
-            test_commands.append("npm test")
-            lint_commands.append("npm run lint")
+        # 1. Map File Tree (shallow for large projects)
+        for p in self.root.rglob("*"):
+            rel_path = str(p.relative_to(self.root))
+            if self.exclusion_filter.is_excluded(rel_path):
+                continue
+            if p.is_file():
+                file_tree.append(rel_path)
+                
+                # 2. Extract Manifests
+                if p.name in ["pyproject.toml", "package.json", "requirements.txt", "Makefile", "go.mod"]:
+                    try:
+                        manifests[rel_path] = p.read_text()[:5000] # Limit size
+                    except Exception:
+                        pass
+                
+                # 3. Extract Entry Point Samples (Common names)
+                if p.name in ["main.py", "app.py", "index.ts", "server.js", "main.go"]:
+                    try:
+                        entry_point_samples[rel_path] = p.read_text()[:2000] # Snippet
+                    except Exception:
+                        pass
 
-        # Basic entry point detection (common names)
-        potential_entries = ["main.py", "app.py", "index.js", "src/main.py", "src/index.ts"]
-        for p in potential_entries:
-            if (self.root / p).exists():
-                entry_points.append(p)
-
-        # Basic structure
-        structure = [str(p.relative_to(self.root)) for p in self.root.iterdir() if not p.name.startswith(".")]
-
-        return ProjectInfo(
+        return ProjectMetadata(
             name=self.root.name,
-            stack=stack,
-            entry_points=entry_points,
-            test_commands=test_commands,
-            lint_commands=lint_commands,
-            structure=structure
+            root=str(self.root),
+            file_tree=file_tree[:500], # Limit tree size for LLM
+            manifests=manifests,
+            entry_point_samples=entry_point_samples
         )

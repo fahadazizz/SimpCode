@@ -1,28 +1,31 @@
 # Architectural Overview
 
-SimpCode is designed to solve the "context blindness" problem of traditional coding assistants. It achieves this by introducing a **Semantic Layer** and a **Deterministic Agentic Loop**.
+I am built on the principle of **Harness Engineering**. This means that my reliability does not come from clever prompts alone, but from the structural constraints of the environment I run in.
 
-## The Semantic Layer (Wiki)
+## The Mental Model: Agent = Model + Harness
+I treat the LLM as a stateless reasoning engine. The **Harness** is my "body"—it manages my memory, assembly of context, and physical execution of tools.
 
-Most AI assistants start every session with zero knowledge of your project's history, architectural rules, or business logic. SimpCode maintains this knowledge in a **Wiki** (stored in `.simp/wiki/`).
+### 1. The Semantic Layer (The Wiki)
+Standard RAG (Retrieval Augmented Generation) uses probabilistic search (embeddings) to find code. I use **Intentional Navigation**. I read your project index and *reason* about which Wiki pages are relevant. My Wiki is a dual-layer Markdown graph:
+*   **Cognitive Layer:** Invariants, Patterns, and Risks.
+*   **Structural Layer:** Module summaries and Symbol contracts.
 
-- **Persistence:** Knowledge survives between sessions.
-- **Semantic Navigation:** Instead of dumping the whole codebase into context, SimpCode "navigates" the Wiki to find relevant pages.
-- **Staleness Detection:** Every Wiki page is pinned to specific file hashes. If the code changes, SimpCode detects the drift and triggers a sync.
+### 2. Hierarchical Context Composition
+I don't dump everything into context. I follow a strict hierarchy:
+1.  **Mandatory:** SIMP.md (Project Model), AGENT.md (Rules), and the Index.
+2.  **Cognitive:** Wiki pages describing invariants and risks.
+3.  **Targeted:** Precise code snippets referenced by the Wiki.
 
-## The Deterministic Agentic Loop
+### 3. State Persistence
+I never rely on conversation history. Every action I take is persisted in a **Plan Artifact** or a **Session Log**. This makes me resilient to interruptions and allows you to audit my reasoning at every step.
 
-SimpCode does not just "generate and pray." It follows a strict 5-mode lifecycle for every task:
+## The Operational Flow
+I operate in five deterministic modes:
 
-1.  **GET MISSION:** Define the user's objective.
-2.  **SCAN SCENE:** Research the codebase using the Wiki and local files.
-3.  **THINK THROUGH:** Decompose the task into a concrete, step-by-step plan.
-4.  **TAKE ACTION:** Execute the plan through a restricted tool harness.
-5.  **GET BETTER:** Update the Wiki and verify the results.
+`GET MISSION` → `SCAN SCENE` → `THINK THROUGH` → `TAKE ACTION` → `GET BETTER`
 
-## Key Layers
-
-- **CLI Layer:** Handles user interaction and command dispatching.
-- **Semantic Layer:** Manages the Wiki, navigation, and freshness.
-- **Reasoning Layer:** Analyzes the project, generates plans, and makes tool-call decisions.
-- **Harness Layer:** Enforces safety, budget, and scope constraints.
+*   **GET MISSION:** Systematic onboarding and knowledge ingestion.
+*   **SCAN SCENE:** Semantic context assembly based on task intent.
+*   **THINK THROUGH:** Multi-pass planning and invariant verification.
+*   **TAKE ACTION:** Multi-turn ReAct execution with inline verification.
+*   **GET BETTER:** Self-healing knowledge maintenance and pattern extraction.
