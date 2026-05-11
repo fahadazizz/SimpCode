@@ -1,51 +1,88 @@
 # SimpCode — High-Integrity Agentic Engineering Assistant
 
-I am SimpCode. I am not a chatbot, a code generator, or a probabilistic search tool. I am a **Senior Staff AI Engineer** built to manage the complexity of production software systems through **Semantic Navigation** and **Harness Engineering**.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/fahadazizz/simpcode/main/assets/logo.png" width="200" alt="SimpCode Logo">
+</p>
 
-Standard coding assistants start every session blind—they grep files, guess context, and dump token soup into an LLM. This is expensive, architecturally ignorant, and fundamentally unreliable. 
+SimpCode is not just another coding assistant. It is a **task-oriented orchestrator** designed to automate complex engineering missions while maintaining absolute architectural truth.
 
-I work differently. I maintain a living knowledge base of your project called the **Wiki**. I consult the Wiki first, reason about your architecture second, and fetch code only when I have a confirmed implementation target. 
-
-## My Core Philosophy
-
-### 1. Wiki-First, Always
-I never read your codebase directly as my first action. I navigate your semantic map to identify **Invariants**, **Patterns**, and **Risks**. Code is fetched only to resolve pointers identified by my reasoning layer.
-
-### 2. Understand Before Acting
-I do not write code the moment you ask. I perform a multi-pass **Scan Scene** to build situational awareness, followed by a **Think Through** phase where I produce a concrete, surgical implementation plan for your approval.
-
-### 3. Harness Engineering over Prompt Engineering
-My reliability comes from structural constraints. I use a multi-turn **ReAct Loop** that enforces a **Read-Before-Write** invariant. I physically cannot write to files outside of my approved plan, and I mandate inline verification (tests/linting) for every logical unit of change.
-
-## High-Integrity Features
-*   **Universal LLM Engine:** Native SDK support for Google Gemini, Anthropic, OpenAI, Groq, OpenRouter, and Ollama.
-*   **Semantic Wiki:** A dual-layer Markdown graph (.simp/wiki/) that stores cognitive intelligence and structural maps.
-*   **Zero-Stub Architecture:** No placeholders. Every component—from AST-aware symbol parsing to bit-perfect token budgeting—is built for production use.
-*   **Simp-Shell TUI:** A high-fidelity interactive environment for real-time collaborative engineering.
-*   **Deterministic Recovery:** Persisted Plan Artifacts allow me to resume failed or interrupted tasks from the exact point of failure.
-
-## Installation
-
-```bash
-git clone https://github.com/user/simpcode
-cd simpcode
-pip install -e .
-```
-
-## Global Setup
-
-Initialize your global configuration (stored in `~/.simpcode/config.json`):
-
-```bash
-simp setup
-```
-
-## The Engineering Lifecycle
-
-1.  **Get Mission:** `simp init` — I analyze your repository and synthesize your project model (`SIMP.md`) and behavioral rules (`AGENT.md`).
-2.  **Scan Scene:** `simp ask "How is state managed?"` — I navigate the Wiki to answer forensic queries with cited file:line ranges.
-3.  **Take Action:** `simp chat` or `simp do "task"` — I architect a plan, obtain your approval, and execute surgical edits with inline verification.
-4.  **Get Better:** `simp sync` — I perform self-healing regeneration of my knowledge base to ensure I never drift from the source truth.
+Unlike chat-indexed tools that get lost in large codebases, SimpCode builds a persistent **Semantic Wiki** of your project. It treats your codebase as a structured knowledge graph, ensuring that every line of code it writes is grounded in your project's unique patterns and constraints.
 
 ---
-*SimpCode is designed for developers who value architectural honesty and surgical precision.*
+
+## The Quick Start
+
+Install SimpCode globally and prepare for your first mission:
+
+```bash
+# 1. Install system-wide
+curl -sSL https://raw.githubusercontent.com/fahadazizz/simpcode/main/install.sh | bash
+
+# 2. Configure your LLM (Anthropic, OpenAI, Groq, Google, etc.)
+simp setup
+
+# 3. Onboard your project
+cd /path/to/your/repo
+simp init
+
+# 4. Start a task
+simp do "Implement a robust retry logic for the API client"
+```
+
+---
+
+## Why SimpCode?
+
+The modern bottleneck isn't typing—it's **context management**. SimpCode solves this through three core pillars:
+
+### 1. The Semantic Wiki (.simp/wiki)
+Standard assistants "grep and guess." SimpCode maintains a repository-local long-term memory. It distillates source code into cognitive nodes, allowing for **zero-hallucination navigation** of complex logic.
+
+### 2. Explicit Implementation Plans
+We follow a **"Think-Before-Type"** philosophy. SimpCode never modifies your code without first presenting a detailed Markdown plan. You review the strategy, approve the targets, and watch the execution.
+
+### 3. Policy-Driven Engineering (AGENT.md)
+Your project has unwritten rules. Put them in `AGENT.md`. SimpCode reads these rules at the start of **every** turn, ensuring it follows your style guide, naming conventions, and testing requirements to the letter.
+
+---
+
+## Main Interface
+
+| Command | Goal | Description |
+| :--- | :--- | :--- |
+| `simp ask` | **Research** | Perform deep forensic queries using the Semantic Wiki. |
+| `simp do` | **Action** | Full Engineering Lifecycle: Research -> Plan -> Approve -> Execute -> Sync. |
+| `simp chat` | **Pairing** | High-fidelity interactive TUI for real-time collaboration. |
+| `simp sync` | **Audit** | Re-sync the Wiki after manual changes or large merges. |
+| `simp setup` | **Config** | Global credential management (~/.simpcode/config.json). |
+
+---
+
+## Documentation
+
+For deep-dives into our architecture and advanced workflows, visit our [Documentation Portal](docs/index.md):
+
+- **[Installation Guide](docs/getting-started/installation-deep-dive.md)**
+- **[Concepts & Architecture](docs/concepts/index.md)**
+- **[The ReAct Loop](docs/concepts/index.md#the-engineering-lifecycle-the-react-loop)**
+- **[Writing High-Quality Rules](docs/how-to/writing-rules.md)**
+- **[CLI Reference](docs/reference/index.md)**
+
+---
+
+## Security & Privacy
+
+- **Local Analysis**: Your code is indexed and analyzed locally. Only relevant snippets and wiki nodes are sent to your provider for reasoning.
+- **Hardened Harness**: SimpCode uses a secure execution layer with shell-escaping and permission gates to prevent unauthorized operations.
+- **Privacy-First**: No data is sent to SimpCode's servers; we talk directly to your chosen AI provider's API.
+
+---
+
+## Contributing
+
+We build for engineers, by engineers. Check out our [Architecture Overview](docs/architecture/index.md) to see how you can extend the core, build new wiki engines, or add support for more LLM providers.
+
+---
+<p align="center">
+  <i>"SimpCode isn't just an assistant; it's a junior engineer who never sleeps and remembers every function you've ever written."</i>
+</p>

@@ -1,5 +1,6 @@
 .venv/
 .gemini/
+.pytest_cache/
 
 __pycache__
 simpcode.egg-info/

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -e
 
-echo "🚀 Starting SimpCode Installation..."
+echo "Starting SimpCode Installation..."
 
 # Define repo URL (Users can replace this or it can point to the official repo)
-REPO_URL=${1:-"https://github.com/simp-code/simpcode.git"}
+REPO_URL=${1:-"https://github.com/fahadazizz/simpcode.git"}
 # Where the source code will live globally
 INSTALL_DIR="${HOME}/.local/share/simpcode"
 # Where the symlink will go so it's in the PATH
