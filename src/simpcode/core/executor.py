@@ -7,6 +7,7 @@ from simpcode.core.llm import LLMClient
 from simpcode.core.state import ExecutionLogger
 from pydantic import BaseModel
 from simpcode.core.prompts import registry
+from rich.console import Console
 
 class ToolCall(BaseModel):
     tool: str
@@ -25,8 +26,9 @@ class TakeAction:
         self.llm = llm
         self.session_id = session_id or f"sess_{int(time.time())}"
         self.logger = ExecutionLogger(self.session_id)
+        self.console = Console()
 
-    def execute(self, plan: Plan, context: str):
+    def execute(self, plan: Plan, context: str, scanner=None, task: str = None):
         allowed_files = list(set([step.target for step in plan.steps]))
         harness = ToolHarness(self.root, allowed_files)
         
@@ -34,11 +36,17 @@ class TakeAction:
         execution_trace = ""
         
         for step in plan.steps:
-            print(f"\n[bold blue]>>> EXECUTION STEP {step.id}[/bold blue]: {step.action}")
+            if scanner and task:
+                self.console.print("[dim]Refreshing Context...[/dim]")
+                try:
+                    current_context = scanner.run(task)
+                except Exception as e:
+                    self.console.print(f"[yellow]Context refresh failed: {e}[/yellow]")
+            self.console.print(f"\n[bold blue]>>> EXECUTION STEP {step.id}[/bold blue]: {step.action}")
             
             step_complete = False
             step_turns = 0
-            max_step_turns = 10 
+            max_step_turns = 30 # Increased for production readiness 
             
             while not step_complete and step_turns < max_step_turns:
                 step_turns += 1
@@ -52,17 +60,17 @@ class TakeAction:
                         system_instruction
                     )
                 except Exception as e:
-                    print(f"  [!] Reasoning Failure: {e}")
+                    self.console.print(f"  [bold red][!] Reasoning Failure:[/bold red] {e}")
                     break
 
-                print(f"  [Thought]: {tool_call.thought}")
+                self.console.print(f"  [dim][Thought]:[/dim] {tool_call.thought}")
                 
                 if tool_call.complete:
-                    print(f"  [✓] Step {step.id} verified and complete.")
+                    self.console.print(f"  [bold green][✓] Step {step.id} verified and complete.[/bold green]")
                     step_complete = True
                     continue
 
-                print(f"  [Action]: {tool_call.tool}({tool_call.args})")
+                self.console.print(f"  [cyan][Action]:[/cyan] {tool_call.tool}({tool_call.args})")
 
                 # Execute via Harness
                 try:

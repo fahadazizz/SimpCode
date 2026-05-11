@@ -1,6 +1,7 @@
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from simpcode.core.prompts import registry
+from rich.console import Console
 
 class PlanStep(BaseModel):
     id: int
@@ -33,6 +34,7 @@ class PlanGenerator:
     def __init__(self, llm_client, scanner):
         self.llm = llm_client
         self.scanner = scanner
+        self.console = Console()
 
     def generate(self, task: str, initial_context: str) -> Plan:
         system_instruction = registry.load("staff_architect")
@@ -53,7 +55,7 @@ You can either generate a production-grade Plan artifact (set is_plan=True and p
             if response.is_plan and response.plan:
                 return response.plan
             elif response.request:
-                print(f"  [Planner] Insufficient context. Requesting additional pages: {', '.join(response.request.pages_to_load)}")
+                self.console.print(f"  [dim][Planner][/dim] Insufficient context. Requesting additional pages: {', '.join(response.request.pages_to_load)}")
                 # Recursively fetch requested pages and build context
                 for page_id in response.request.pages_to_load:
                     if page_id not in current_context:
@@ -61,7 +63,7 @@ You can either generate a production-grade Plan artifact (set is_plan=True and p
                         if page and not self.scanner.wiki.is_page_stale(page):
                             current_context += f"\n\n--- SUPPLEMENTAL CONTEXT: {page_id} ---\n{page.content}"
             else:
-                print("  [Planner] Invalid response. Proceeding to force plan generation.")
+                self.console.print("  [dim][Planner][/dim] Invalid response. Proceeding to force plan generation.")
                 break
                 
         # Force plan on last turn if loop is exhausted

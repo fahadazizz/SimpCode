@@ -69,7 +69,7 @@ def setup():
 
 @cli.command()
 def init():
-    """Get Mission: Onboard SimpCode to the current project."""
+    """Get Mission: Onboard SimpCode to the current project and enter TUI."""
     root = get_project_root()
     console.print(Panel(f"Initializing SimpCode at [bold]{root}[/bold]", title="GET MISSION", border_style="blue"))
     
@@ -80,21 +80,26 @@ def init():
     bootstrap = WikiBootstrap(llm, root)
     
     try:
-        with console.status("[bold blue]Collecting codebase metadata..."):
-            metadata = analyzer.collect_metadata()
-        
-        with console.status("[bold blue]Synthesizing Project Intelligence..."):
-            docs = synthesizer.synthesize(metadata)
-            generator.write_docs(docs)
+        if not (root / ".simp").exists():
+            with console.status("[bold blue]Collecting codebase metadata..."):
+                metadata = analyzer.collect_metadata()
             
-        with console.status("[bold blue]Compiling Initial Wiki (Semantic Core)..."):
-            bootstrap.run(metadata)
+            with console.status("[bold blue]Synthesizing Project Intelligence..."):
+                docs = synthesizer.synthesize(metadata)
+                generator.write_docs(docs)
+                
+            with console.status("[bold blue]Compiling Initial Wiki (Semantic Core)..."):
+                bootstrap.run(metadata)
+            
+            console.print("\n[bold green]✓ Mission Establishment Complete.[/bold green]")
+            console.print(" - [cyan]SIMP.md[/cyan] (Project Intelligence)")
+            console.print(" - [cyan]AGENT.md[/cyan] (Behavioral Rules)")
+            console.print(" - [cyan].simp/wiki/[/cyan] (Knowledge Base)")
         
-        console.print("\n[bold green]✓ Mission Establishment Complete.[/bold green]")
-        console.print(" - [cyan]SIMP.md[/cyan] (Project Intelligence)")
-        console.print(" - [cyan]AGENT.md[/cyan] (Behavioral Rules)")
-        console.print(" - [cyan].simp/wiki/[/cyan] (Knowledge Base)")
-        console.print("\nRun `simp status` to verify health.")
+        # Always transition to chat/TUI on 'simp init'
+        shell = SimpShell()
+        shell.run()
+        
     except Exception as e:
         console.print(f"[bold red]Initialization Failed:[/bold red] {e}")
 
@@ -313,9 +318,21 @@ from simpcode.cli.shell import SimpShell
 @cli.command()
 @click.option('--provider', help="Override global LLM provider.")
 @click.option('--model', help="Override global LLM model ID.")
-def chat(provider, model):
-    """Interactive TUI session mode."""
-    shell = SimpShell(provider=provider, model_id=model)
+@click.option('--session', help="Load a specific session ID.")
+@click.option('--new', is_flag=True, help="Force a new session.")
+def chat(provider, model, session, new):
+    """Interactive TUI session mode. Defaults to latest session."""
+    if not (get_project_root() / ".simp").exists():
+        console.print("[yellow]Project not initialized. Running `init` first...[/yellow]")
+        # We don't call init() directly to avoid complex recursion/state issues in Click
+        # Just tell them to run init or we could trigger the logic.
+        # But for now, let's just let SimpShell handle it as it does.
+    
+    # If 'new' is flag, we pass a unique ID to SimpShell to force new
+    if new:
+        session = f"session_{int(time.time())}"
+        
+    shell = SimpShell(provider=provider, model_id=model, session_id=session)
     shell.run()
 
 def main():

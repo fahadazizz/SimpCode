@@ -29,6 +29,9 @@ Transforms a standard directory into a SimpCode-aware workspace.
 - Creates `SIMP.md` (Project Manifest).
 - Creates `AGENT.md` (Behavioral Policy).
 - Bootstraps `.simp/wiki/` (Knowledge Base).
+- **Auto-Enter TUI**: Automatically launches the interactive Rich TUI after onboarding is complete.
+- **Flags**:
+  - `--chat`: (Deprecated/Default) Automatically launches the interactive shell.
 
 #### `simp ask [QUERY]`
 Performs semantic search and architectural research.
@@ -39,12 +42,27 @@ Performs semantic search and architectural research.
 Begins a full engineering lifecycle mission.
 - **Input**: Goal description.
 - **Logic**: Research -> Plan -> Approval -> Execution -> Sync.
+- **Flags**:
+  - `--yes`: Skip the approval step (use with caution).
+  - `--dry-run`: Show the implementation plan but do not execute changes.
 
 #### `simp chat`
 Launches the interactive Rich TUI.
-- Supports multiline input.
-- Renders code snippets with syntax highlighting.
-- Shortcuts: `/exit`, `/clear`.
+- **Persistent Sessions**: Saves and reloads chat history, provider settings, and project context automatically.
+- **Recall Flow**: Defaults to the most recent active session for seamless "resume-where-you-left" engineering.
+- **Options**:
+  - `--session <id>`: Load a specific session. Defaults to the most recent.
+
+#### Slash Commands (Inside Chat)
+| Command | Action |
+| :--- | :--- |
+| `/ask <query>` | Research-only mode using Wiki context. |
+| `/do <task> [--yes] [--dry-run]` | Full implementation lifecycle (Plan -> Execute) with support for flags. |
+| `/sync` | Force a Wiki synchronization. |
+| `/init` | Re-initialize the project from within the shell. |
+| `/sessions` | List recent local engineering sessions. |
+| `/clear` | Flush current session history. |
+| `/exit` | Save state and quit SimpCode. |
 
 #### `simp sync`
 Manually triggers a re-index of the repository.

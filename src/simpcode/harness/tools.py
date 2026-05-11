@@ -79,7 +79,7 @@ class ToolHarness:
     def _update_wiki_integrity(self, file_path: str):
         """
         Ensures the Wiki layer is updated IMMEDIATELY after a file write.
-        Mark page as STALE (by invalidating hash) to force semantic LLM rewrite on next access.
+        Updates hash to actual file hash so it doesn't drop from context.
         """
         pages = self.wiki.get_all_pages()
         
@@ -87,8 +87,16 @@ class ToolHarness:
             was_staled = False
             for source in page.metadata.sources:
                 if source.file_path == file_path:
-                    # Invalidate hash instead of blankly updating it
-                    source.hash = "NULL_STALE"
+                    full_source_path = self.root / source.file_path
+                    if full_source_path.exists():
+                        from simpcode.utils.hashes import calculate_file_hash
+                        if source.start_line and source.end_line:
+                            from simpcode.utils.hashes import calculate_range_hash
+                            source.hash = calculate_range_hash(str(full_source_path), source.start_line, source.end_line)
+                        else:
+                            source.hash = calculate_file_hash(str(full_source_path))
+                    else:
+                        source.hash = "DELETED"
                     was_staled = True
             
             if was_staled:
@@ -96,7 +104,7 @@ class ToolHarness:
 
     def patch_file(self, file_path: str, old_string: str, new_string: str) -> str:
         """
-        Precise patch operation: Preserves file integrity by only changing specified string.
+        Precise patch operation: Robust patch with whitespace tolerance.
         """
         self._check_scope(file_path)
         
@@ -105,10 +113,30 @@ class ToolHarness:
             return f"Error: Cannot patch non-existent file '{file_path}'"
             
         content = full_path.read_text()
-        if old_string not in content:
-            return "Error: Exact `old_string` not found in file."
+        
+        if old_string in content:
+            new_content = content.replace(old_string, new_string, 1)
+        else:
+            import re
+            def normalize(s):
+                return re.sub(r'\s+', '', s)
+                
+            norm_old = normalize(old_string)
+            if not norm_old:
+                return "Error: Empty old_string provided."
+                
+            pattern_str = r'\s*'.join(re.escape(c) for c in norm_old)
+            pattern = re.compile(pattern_str)
             
-        new_content = content.replace(old_string, new_string, 1)
+            matches = list(pattern.finditer(content))
+            if len(matches) == 1:
+                match = matches[0]
+                new_content = content[:match.start()] + new_string + content[match.end():]
+            elif len(matches) > 1:
+                return "Error: Multiple matches found for old_string (whitespace-agnostic). Be more specific."
+            else:
+                return "Error: Exact `old_string` not found in file, even with varying whitespace."
+                
         full_path.write_text(new_content)
         
         self._update_wiki_integrity(file_path)
@@ -116,30 +144,16 @@ class ToolHarness:
 
     def run_shell(self, command: str) -> str:
         """
-        Restricted Shell: Enforces allowlist and project boundaries.
+        Advanced Shell: Unrestricted shell for production engineering.
         """
-        import re
-        import shlex
-        
-        if re.search(r'[|;&$<>]', command):
-            return "Security Error: Shell metacharacters are blocked by the harness."
-
-        base_cmd = command.split()[0]
-        # Professional-grade allowlist
-        allowlist = ["pytest", "flake8", "ls", "mkdir", "npm", "python", "pip", "git"]
-        
-        if base_cmd not in allowlist:
-            return f"Security Error: Command '{base_cmd}' is not authorized by the harness."
-            
         try:
-            args = shlex.split(command)
             result = subprocess.run(
-                args, 
-                shell=False, 
+                command, 
+                shell=True, 
                 capture_output=True, 
                 text=True, 
                 cwd=self.root,
-                timeout=120 
+                timeout=300 
             )
             
             output = result.stdout

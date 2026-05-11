@@ -48,6 +48,7 @@ class OpenAICompatibleProvider(LLMProvider):
             return data["choices"][0]["message"]["content"]
 
     def structured_output(self, prompt: str, schema: Any, system_instruction: str) -> Any:
+        import re
         # Most compatible approach: append schema to instruction
         schema_json = schema.model_json_schema() if hasattr(schema, 'model_json_schema') else {}
         instruction = f"{system_instruction}\n\nOUTPUT CONTRACT: You MUST return a single valid JSON object matching this schema: {json.dumps(schema_json)}"
@@ -56,10 +57,10 @@ class OpenAICompatibleProvider(LLMProvider):
         
         try:
             cleaned = response_text.strip()
-            if "```json" in cleaned:
-                cleaned = cleaned.split("```json")[1].split("```")[0].strip()
-            elif "```" in cleaned:
-                cleaned = cleaned.split("```")[1].split("```")[0].strip()
+            # Attempt to extract JSON broadly using regex to ignore any conversational padding.
+            match = re.search(r'(\{.*\})', cleaned, re.DOTALL)
+            if match:
+                cleaned = match.group(1)
             
             data = json.loads(cleaned)
             return schema(**data) if schema else data

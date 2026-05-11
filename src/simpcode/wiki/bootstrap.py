@@ -83,13 +83,33 @@ Generate the BootstrapResult.
         idx_manager.update_index(module_entries, [], [])
 
     def _guess_main_file(self, mod_name: str, file_tree: List[str]) -> Optional[str]:
+        # Language-agnostic module resolution
         targets = [
+            # Python
             f"{mod_name}/__init__.py",
             f"{mod_name}.py",
             f"src/{mod_name}/__init__.py",
-            f"src/{mod_name}.py"
+            f"src/{mod_name}.py",
+            # JS/TS
+            f"{mod_name}/index.ts",
+            f"{mod_name}/index.js",
+            f"{mod_name}.ts",
+            f"{mod_name}.js",
+            f"src/{mod_name}/index.ts",
+            f"src/{mod_name}/index.js",
+            # Rust / Go
+            f"{mod_name}/main.rs",
+            f"{mod_name}/lib.rs",
+            f"{mod_name}/main.go",
         ]
+        
         for t in targets:
             if t in file_tree:
                 return t
+                
+        # Fallback: fuzzy match
+        for file in file_tree:
+            if f"{mod_name}" in file:
+                return file
+                
         return None

@@ -62,11 +62,41 @@ Extract high-integrity knowledge proposals.
             return
             
         path = self.wiki_dir / filename
+        meta = None
         if not path.exists():
+            from simpcode.wiki.models import WikiPageMetadata, WikiPage
+            import time
             meta = WikiPageMetadata(id=filename.split(".")[0], type="cognitive", last_updated=time.time())
-            WikiPage(metadata=meta, content=f"# {title}\n\nProject {title.lower()}.\n").to_file(path)
+            current_content = f"# {title}\n\nProject {title.lower()}.\n"
+        else:
+            from simpcode.wiki.models import WikiPage
+            page = WikiPage.from_file(path)
+            meta = page.metadata
+            current_content = page.content
             
-        with open(path, "a") as f:
-            f.write(f"\n### Added {time.strftime('%Y-%m-%d')} \n")
-            for item in items:
-                f.write(f"- {item}\n")
+        # Use LLM to smartly merge and dedup
+        from pydantic import BaseModel
+        class MergedContent(BaseModel):
+            content: str
+            
+        prompt = f"""You are a knowledge refinement agent.
+        
+CURRENT COGNITIVE LAYER ({title}):
+{current_content}
+
+NEW PROPOSED ITEMS:
+{items}
+
+Merge the new items into the current layer intelligently. Deduplicate similar ideas, group logically, and keep it concise. Return ONLY the new full markdown content."""
+        
+        try:
+            result = self.llm.structured_output(prompt, MergedContent, "You are a technical document writer preserving project wisdom.")
+            new_content = result.content
+        except Exception:
+            # Fallback if LLM fails
+            new_content = current_content + "\n### Added new items\n" + "\n".join(f"- {i}" for i in items)
+            
+        from simpcode.wiki.models import WikiPage
+        import time
+        meta.last_updated = time.time()
+        WikiPage(metadata=meta, content=new_content).to_file(path)

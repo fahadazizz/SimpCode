@@ -51,7 +51,9 @@ class ContextBudgeter:
                 assembled_content.append(header + content)
                 current_tokens += tokens
             else:
-                # Log or warn about dropped content
+                dropped_msg = f"\n[SYSTEM WARNING: Context Budget Exceeded - Dropped Module/Code: {item.id}]\n"
+                assembled_content.append(dropped_msg)
+                current_tokens += self.count_tokens(dropped_msg)
                 print(f"[Warning] Context Budget Exceeded: Dropping {item.id}")
                 
         return "".join(assembled_content)

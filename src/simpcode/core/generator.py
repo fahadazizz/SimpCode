@@ -40,5 +40,14 @@ class DocumentGenerator:
         self.root = root
 
     def write_docs(self, docs: SynthesizedDocs):
-        (self.root / "SIMP.md").write_text(docs.simp_md)
-        (self.root / "AGENT.md").write_text(docs.agent_md)
+        simp_content = docs.simp_md.strip()
+        agent_content = docs.agent_md.strip()
+        
+        # Ensure we always have content
+        if not simp_content:
+            simp_content = "# Project Manifest (SIMP)\n\nAuto-generated structure."
+        if not agent_content:
+            agent_content = "# SimpCode Agent Policy\n\n1. Read before write.\n2. Ensure tests pass."
+
+        (self.root / "SIMP.md").write_text(simp_content + "\n")
+        (self.root / "AGENT.md").write_text(agent_content + "\n")
