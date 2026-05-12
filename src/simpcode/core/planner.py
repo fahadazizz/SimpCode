@@ -40,18 +40,7 @@ class PlanGenerator:
         system_instruction = registry.load("staff_architect")
         current_context = initial_context
 
-        # Prepend SPEC.md when present so explicit target-state requirements can shape the plan.
-        try:
-            spec_path = self.scanner.root / "SPEC.md"
-            if spec_path.exists():
-                spec_text = spec_path.read_text()
-                # Keep SPEC inclusion token-efficient: include a short trimmed form
-                spec_snippet = spec_text if len(spec_text) <= 2000 else spec_text[:2000] + "\n... (truncated SPEC.md)"
-                current_context = f"--- SPEC.md (User Requirements) ---\n{spec_snippet}\n\n{current_context}"
-        except Exception:
-            # If reading SPEC.md fails, continue with existing context
-            pass
-        
+
         max_turns = 3
         for turn in range(max_turns):
             prompt = registry.load("staff_architect_plan", include_base=False).format(

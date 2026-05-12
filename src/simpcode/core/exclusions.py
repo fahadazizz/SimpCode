@@ -11,7 +11,7 @@ class ExclusionFilter:
         self.root = root
         self.exclusion_patterns = set([
             ".env", ".env.*", "secrets.json", "*.key", "*.pem", 
-            "id_rsa", ".git/*", ".simp/*"
+            "id_rsa", ".git/*", ".simp/*", ".simpcode/*", "node_modules/*", "__pycache__/*"
         ])
         self._load_gitignore()
 

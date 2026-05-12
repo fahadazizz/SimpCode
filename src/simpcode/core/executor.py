@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 import time
 from simpcode.core.planner import Plan, PlanStep
 from simpcode.harness.tools import ToolHarness
@@ -8,6 +8,7 @@ from simpcode.core.state import ExecutionLogger
 from pydantic import BaseModel
 from simpcode.core.prompts import registry
 from rich.console import Console
+from simpcode.wiki.engine import WikiEngine
 
 class ToolCall(BaseModel):
     tool: str
@@ -35,9 +36,14 @@ class TakeAction:
         current_context = context
         execution_trace = ""
         recent_tool_calls: List[str] = []
+        files_modified: Set[str] = set()
 
         def _tool_path(args: Dict[str, Any]) -> str:
             return args.get("path") or args.get("file_path") or args.get("file") or ""
+
+        def _verification_failed(result: str) -> bool:
+            normalized = result.upper()
+            return any(token in normalized for token in ["EXECUTION FAILURE", "SECURITY VIOLATION", "PLAN VIOLATION", "ERROR"])
         
         for step in plan.steps:
             if scanner and task:
@@ -107,17 +113,30 @@ class TakeAction:
                             harness.write_file(file_path, tool_call.args["content"])
                         else:
                             harness.patch_file(file_path, tool_call.args["old_string"], tool_call.args["new_string"])
-                        
-                        # System-enforced structural linting
+
+                        # Inline Wiki Update (SDD 9.5)
+                        self._update_wiki(file_path)
+                        files_modified.add(file_path)
+
                         lint_result = harness.run_shell(f"flake8 {file_path}")
-                        if "EXECUTION FAILURE" in lint_result or "Security Error" in lint_result:
+                        if _verification_failed(lint_result):
                             result = f"File updated, but structural linting failed. You MUST fix this error before proceeding:\n{lint_result}"
                             status = "failure"
+                        elif step.verification:
+                            verification_result = harness.run_shell(step.verification)
+                            if _verification_failed(verification_result):
+                                result = (
+                                    f"File updated, but step verification failed. You MUST fix this error before proceeding:\n"
+                                    f"{verification_result}"
+                                )
+                                status = "failure"
+                            else:
+                                result = "File updated and passed structural linting plus declared verification. Proceed."
                         else:
                             result = "File updated and passed structural linting. Proceed."
                     elif tool_call.tool == "run_shell":
                         result = harness.run_shell(tool_call.args["command"])
-                        if "ERROR" in result or "FAILURE" in result:
+                        if _verification_failed(result):
                             status = "failure"
                     else:
                         result = f"Error: Unknown tool '{tool_call.tool}'"
@@ -130,7 +149,7 @@ class TakeAction:
                     if status == "success" and tool_call.tool == "read_file" and result:
                         current_context += f"\n\n--- TOOL RESULT: {tool_call.tool} {tool_signature} ---\n{result[:4000]}"
 
-                    if status in {"failure", "error"} and "Plan Violation" in result:
+                    if status in {"failure", "error"} and ("Plan Violation" in result or "verification failed" in result.lower()):
                         break
                     
                 except Exception as e:
@@ -145,4 +164,38 @@ class TakeAction:
                 print(f"[red]CRITICAL: Step {step.id} failed after {max_step_turns} attempts. Aborting plan.[/red]")
                 break
                 
+        if files_modified:
+            wiki = WikiEngine(self.root)
+            wiki.append_change_log(
+                task_description=task or "Execution Plan",
+                files_modified=list(files_modified),
+                rationale=plan.rationale
+            )
+            from simpcode.wiki.index import IndexManager
+            IndexManager(self.root / ".simp" / "wiki").update_hotspots(list(files_modified))
+            
         return execution_trace
+
+    def _update_wiki(self, file_path: str):
+        """Synchronizes relevant Wiki pages with recent file changes."""
+        try:
+            wiki = WikiEngine(self.root)
+            pages = wiki.get_all_pages()
+            for page in pages:
+                # Check if this page tracks the modified file
+                if any(s.file_path == file_path for s in page.metadata.sources):
+                    instruction = registry.load("wiki_maintainer")
+                    full_path = self.root / file_path
+                    if not full_path.exists():
+                        continue
+                        
+                    code_context = f"--- {file_path} ---\n{full_path.read_text()[:5000]}"
+                    prompt = f"OLD CONTENT:\n{page.content}\n\nCurrent Code:\n{code_context}\n\nUpdate page."
+                    
+                    # Update page content
+                    page.content = self.llm.chat([{"role": "user", "content": prompt}], instruction)
+                    page.metadata.last_updated = time.time()
+                    wiki.save_page(page)
+                    self.console.print(f"  [Wiki] Synced {page.metadata.id} with changes in {file_path}")
+        except Exception as e:
+            self.console.print(f"  [yellow][!] Wiki sync degraded for {file_path}: {e}[/yellow]")

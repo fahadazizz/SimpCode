@@ -1,4 +1,5 @@
 import os
+import shlex
 import subprocess
 import time
 from pathlib import Path
@@ -52,12 +53,13 @@ class ToolHarness:
 
     def read_file(self, file_path: str) -> str:
         try:
-            if self.exclusion_filter.is_excluded(file_path):
-                return f"Security Violation: Reading '{file_path}' is structurally blocked by ExclusionFilter."
+            # Enforce full scope check for reads as well. Raises PermissionError on violation.
+            self._check_scope(file_path)
 
             full_path = self.path_manager.normalize_path(self.root, file_path)
             if not full_path.exists():
                 return f"Error: File '{file_path}' does not exist."
+            # Return file contents as-is; callers should treat this as untrusted content.
             return full_path.read_text()
         except PermissionError as e:
             return f"Security Violation: {str(e)}"
@@ -144,25 +146,50 @@ class ToolHarness:
 
     def run_shell(self, command: str) -> str:
         """
-        Advanced Shell: Unrestricted shell for production engineering.
+        Safe shell executor: permit only a conservative allowlist of commands and
+        execute without a shell when possible. Rejects shell control operators
+        to avoid injection and redirection attacks.
         """
         try:
+            # Basic sanitation: do not permit shell operators or constructs that
+            # require a shell. If they are present, reject outright.
+            forbidden_tokens = [';', '&', '|', '>', '<', '$', '`']
+            if any(tok in command for tok in forbidden_tokens):
+                return "Security Violation: shell operators are prohibited in run_shell."
+
+            # Require a conservative allowlist for the command (first token).
+            parts = shlex.split(command)
+            if not parts:
+                return "Error: empty command"
+
+            allowlist = {
+                'ls', 'git', 'cat', 'python', 'pytest', 'pip', 'echo', 'pwd',
+                'sed', 'awk', 'grep', 'head', 'tail', 'wc', 'mkdir', 'rmdir', 'cp', 'mv',
+                'flake8', 'ruff', 'mypy'
+            }
+
+            cmd = parts[0]
+            if cmd not in allowlist:
+                return f"Security Violation: command '{cmd}' is not permitted by policy."
+
+            # Execute without shell to avoid shell injection; pass args directly.
             result = subprocess.run(
-                command, 
-                shell=True, 
-                capture_output=True, 
-                text=True, 
+                parts,
+                shell=False,
+                capture_output=True,
+                text=True,
                 cwd=self.root,
-                timeout=300 
+                timeout=300,
+                check=False,
             )
-            
-            output = result.stdout
+
+            output = result.stdout or ''
             if result.stderr:
                 output += f"\nSTDERR:\n{result.stderr}"
-            
+
             if result.returncode != 0:
                 return f"EXECUTION FAILURE (Code {result.returncode}):\n{output}"
-            
+
             return output
         except subprocess.TimeoutExpired:
             return "Error: Command timed out."

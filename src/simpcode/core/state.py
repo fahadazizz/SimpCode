@@ -12,7 +12,7 @@ class SessionMessage(BaseModel):
 class SessionState(BaseModel):
     session_id: str
     project_root: str
-    history: List[SessionMessage] = []
+    history: List[SessionMessage] = Field(default_factory=list)
     current_provider: str = "groq"
     current_model: str = "llama-3.3-70b-versatile"
     last_updated: float = Field(default_factory=time.time)
@@ -27,6 +27,7 @@ class SessionManager:
         self.project_root = project_root
 
     def save_session(self, state: SessionState):
+        self.sessions_dir.mkdir(parents=True, exist_ok=True)
         state.last_updated = time.time()
         file_path = self.sessions_dir / f"{state.session_id}.json"
         with open(file_path, "w") as f:
@@ -36,7 +37,7 @@ class SessionManager:
         file_path = self.sessions_dir / f"{session_id}.json"
         if file_path.exists():
             with open(file_path, "r") as f:
-                return SessionState(**json.load(f))
+                return SessionState.model_validate(json.load(f))
         return None
 
     def list_sessions(self) -> List[Dict[str, Any]]:

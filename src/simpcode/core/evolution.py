@@ -4,7 +4,6 @@ from pydantic import BaseModel
 import time
 from simpcode.wiki.models import WikiPage, WikiPageMetadata
 from simpcode.core.llm import LLMClient
-from simpcode.core.paths import get_wiki_dir
 from simpcode.core.prompts import registry
 
 class EvolutionProposals(BaseModel):
@@ -21,23 +20,12 @@ class GetBetter:
     def __init__(self, root: Path, llm: LLMClient):
         self.root = root
         self.llm = llm
-        self.wiki_dir = get_wiki_dir()
+        self.wiki_dir = self.root / ".simp" / "wiki"
+        self.wiki_dir.mkdir(parents=True, exist_ok=True)
 
     def run(self, task: str, execution_trace: str):
         system_instruction = registry.load("staff_researcher")
-        # Include SPEC.md when present so learned proposals can align to explicit user requirements.
-        spec_text = ""
-        try:
-            spec_path = self.root / "SPEC.md"
-            if spec_path.exists():
-                spec_text = spec_path.read_text()
-                if len(spec_text) > 2000:
-                    spec_text = spec_text[:2000] + "\n... (truncated SPEC.md)"
-        except Exception:
-            spec_text = ""
-
         prompt = registry.load("staff_researcher_learning", include_base=False).format(
-            spec_text=spec_text,
             task=task,
             execution_trace=execution_trace,
         )

@@ -14,11 +14,13 @@ OUTPUT: Cognitive pages (invariants, patterns, risks) and Structural pages (modu
 
 # INTENT
 1. COMPILATION OVER RETRIEVAL: You are not just indexing; you are "compiling" meaning. Every Wiki page should add semantic value not found in the raw code.
-2. COGNITIVE LAYER: 
+2. COGNITIVE LAYER (MANDATORY 5 FILES): 
    - invariants.md: Define the non-negotiable architectural laws.
    - patterns.md: Extract repeated implementation/naming conventions.
    - risks.md: Identify fragile dependencies or complex logic areas.
-3. STRUCTURAL LAYER: Identify top-level modules. Describe their PRIMARY responsibility and cross-module dependencies.
+   - seams.md: Document the isolation boundaries and interfaces between major systems.
+   - flows.md: Trace the primary end-to-end execution paths of the system.
+3. STRUCTURAL LAYER: Identify top-level modules by recursively walking the logical dependencies outward from the provided entry points. Describe their PRIMARY responsibility and cross-module dependencies.
 
 # CONSTRAINTS
 - NEVER restate code that is obvious. 

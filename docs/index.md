@@ -1,263 +1,87 @@
 # SimpCode Documentation
 
-**Complete, production-ready documentation for the SimpCode agentic software engineering system.**
+This documentation set explains the current **TUI-first** SimpCode experience from a real user’s point of view.
 
-**Version**: 3.0 (Production Ready) | **Status**: All 8 architectural flaws fixed and validated
+The goal of SimpCode is simple: help you understand a repository, plan work safely, make changes with verification, and keep a local project memory in sync as the codebase evolves.
 
----
+## Start Here
 
-## 🚀 Start Here
+If you are new to SimpCode, read these in order:
 
-**New to SimpCode?** Begin with the [Comprehensive Guide](COMPREHENSIVE_GUIDE.md)
+1. [User Guide](guide.md)
+2. [Getting Started Overview](getting-started/overview.md)
+3. [Setup and Usage](getting-started/setup-and-usage.md)
+4. [Command Reference](reference/index.md)
 
-- ✅ What SimpCode is and why it exists
-- ✅ Installation and setup
-- ✅ Core concepts and architecture
-- ✅ Step-by-step getting started
-- ✅ Configuration and customization
-- ✅ Advanced usage patterns
-- ✅ Complete API reference
-- ✅ FAQ
-
----
+## Documentation Map
 
-## 📚 Complete Documentation
+### Getting Started
 
-### 1. [Comprehensive User Guide](COMPREHENSIVE_GUIDE.md) (5000+ lines)
+- [Overview](getting-started/overview.md)
+- [Installation Deep Dive](getting-started/installation-deep-dive.md)
+- [Setup and Usage](getting-started/setup-and-usage.md)
+- [File Ownership](getting-started/file-ownership.md)
 
-**For**: All users (beginners to advanced)
+### Concepts
 
-**Covers**:
-- What is SimpCode and why use it
-- Core concepts (SPEC.md, SIMP.md, Wiki, context assembly, execution workflow)
-- Getting started (installation, first task, basic workflows)
-- System architecture (component overview, detailed interactions)
-- User workflows (onboarding, feature development, debugging, refactoring)
-- Configuration (SPEC.md, SIMP.md, skills, LLM providers, custom prompts)
-- Advanced usage (large monorepos, multi-LLM, wiki maintenance, performance tuning)
-- Troubleshooting basics
-- Real-world examples
-- Complete API reference
-- FAQ (vs Copilot, non-Python support, costs, privacy, offline mode)
-
-**Start here if**: You want to understand and use SimpCode
-
----
-
-### 2. [Architecture Deep Dive](ARCHITECTURE_DEEP_DIVE.md) (2000+ lines)
-
-**For**: Developers and contributors wanting to understand internals
-
-**Covers**:
-- Design principles (5 core pillars: Wiki-First, tiered context, read-before-write, safe execution, continuous learning)
-- Component interactions (initialization, execution, context assembly, planning, execution, learning flows with diagrams)
-- Data structures (ProjectMetadata, Plan, WikiPage, ContextItem)
-- Error recovery strategies
-- Performance characteristics (token usage, time complexity, memory)
-- Safety guarantees (scope enforcement, semantic integrity, budget enforcement)
-- Extension points (custom roles, tools, LLM providers)
-- Known limitations and roadmap
-
-**Read this if**: You want to understand how SimpCode works internally or contribute
-
----
-
-### 3. [Troubleshooting Guide](TROUBLESHOOTING.md) (1500+ lines)
-
-**For**: Users experiencing problems
-
-**Covers**:
-- Quick reference table (22+ issues with solutions)
-- Installation & setup issues
-- Runtime issues
-- Execution issues
-- Context & Wiki issues
-- LLM & API issues
-- Performance issues
-- File & permission issues
-- Debugging techniques
-- Getting help
-
-**Use this if**: Something isn't working as expected
-
----
-
-### 4. [Examples & Real-World Workflows](EXAMPLES.md) (1500+ lines)
-
-**For**: Learning how to use SimpCode effectively
-
-**Covers**:
-- Example 1: Onboarding a new project
-- Example 2: Feature development (rate limiting)
-- Example 3: Debugging and fixing bugs
-- Example 4: Refactoring for type safety
-- Example 5: Large refactoring
-- Example 6: Performance optimization
-- Example 7: Documentation generation
-- Example 8: Testing improvements
-- Example 9: Multi-task workflow (weekly development)
-- Example 10: Handling uncertainty
-- Anti-patterns and best practices
-- Performance tips
-
-**Learn from this if**: You want to see SimpCode in action and understand workflows
-
----
-
-## 🎯 Quick Navigation
-
-| I want to... | Go to | Link |
-|---|---|---|
-| Get started quickly | Comprehensive Guide | [Start here](COMPREHENSIVE_GUIDE.md#getting-started) |
-| Understand what SimpCode is | Comprehensive Guide | [What is SimpCode](COMPREHENSIVE_GUIDE.md#what-is-simpcode) |
-| Learn core concepts | Comprehensive Guide | [Core Concepts](COMPREHENSIVE_GUIDE.md#core-concepts) |
-| Install SimpCode | Troubleshooting | [Installation](TROUBLESHOOTING.md#installation--setup) |
-| Configure LLM | Comprehensive Guide | [Configuration](COMPREHENSIVE_GUIDE.md#configuration--customization) |
-| See real examples | Examples | [Examples](EXAMPLES.md) |
-| Understand architecture | Architecture Deep Dive | [Design Principles](ARCHITECTURE_DEEP_DIVE.md#design-principles) |
-| Fix a problem | Troubleshooting | [Quick Reference](TROUBLESHOOTING.md#quick-reference) |
-| API reference | Comprehensive Guide | [API Reference](COMPREHENSIVE_GUIDE.md#api-reference) |
-| Extend SimpCode | Architecture Deep Dive | [Extension Points](ARCHITECTURE_DEEP_DIVE.md#extension-points) |
-| FAQ | Comprehensive Guide | [FAQ](COMPREHENSIVE_GUIDE.md#faq) |
-
----
-
-## 🔑 Key Concepts
-
-### SPEC.md
-Your **authoritative project specification** (requirements, constraints, architectural goals) — optional.
-- You write and maintain it.
-- Use it when you need an explicit contract for target-state requirements.
-- Loaded into context only when present; not required for SimpCode to operate.
-- When present, it informs planning and verification.
-
-### SIMP.md
-**System manifest**: What does your project look like RIGHT NOW?
-- Auto-generated at init, then you maintain.
-- Always loaded in context (never dropped).
-- Quick reference for current state and repository-level policy.
-
-### Wiki (.simp/wiki/)
-**Semantic knowledge graph** that learns and remembers your project
-- Auto-generated at init, evolved with each task
-- Loaded strategically when relevant
-- Hash-validated against source code
-
-### Context Assembly
-**Intelligent 4-tier process** to maximize value per token
-1. Mandatory: SIMP.md, index (never dropped). `SPEC.md` is optional and included only when present.
-2. Semantic: Wiki pages selected by LLM reasoning
-3. Targeted: Code ranges extracted from Wiki sources
-4. Budget enforcement: Assemble within token limits
-
-### Execution Workflow
-**Four-phase cycle** that gets smarter with each task
-1. **Context Assembly**: Gather relevant knowledge
-2. **Planning**: Design atomic, verifiable steps
-3. **Execution**: Execute with verification and safety
-4. **Learning**: Extract and memorize patterns
-
----
-
-## ⚙️ Quick Start
-
-```bash
-# 1. Install
-pip install git+https://github.com/simpcode/simpcode.git
-
-# 2. Configure LLM (one time)
-simp setup
-# Choose: Provider, Model, API Key
-
-# 3. Initialize your project
-cd /path/to/your/project
-simp init
-# Generates: SIMP.md, SPEC.md, .simp/wiki/
-
-# 4. Edit SPEC.md with your actual requirements
-
-# 5. Start working
-simp init  # Opens interactive TUI
-
-simp> Add type hints to auth module
-# [Context Assembly] → [Planning] → [Execution] → [Learning]
-# Done! Wiki now understands type hints pattern
-
-simp> Add type hints to api module
-# (Faster, uses learned patterns)
-
-simp> Add comprehensive error handling
-# (System is now very capable)
-```
-
----
-
-## ✅ Production Ready
-
-**All 8 Architectural Flaws Fixed**:
-- ✅ Dynamic context refresh per step
-- ✅ Whitespace-tolerant patching
-- ✅ Unrestricted shell execution
-- ✅ Immediate Wiki hash recalculation
-- ✅ Visible truncation warnings
-- ✅ LLM-driven deduplication
-- ✅ Multi-language module discovery
-- ✅ Hierarchical compression for large monorepos
-
-**Test Coverage**: 25/25 tests passing  
-**Validation**: All functionality verified in production scenarios  
-**Status**: Ready for real-world use
-
----
-
-## 👥 By Role
-
-### I'm a User
-1. Start: [Comprehensive Guide](COMPREHENSIVE_GUIDE.md)
-2. Learn: [Examples](EXAMPLES.md)
-3. Troubleshoot: [Troubleshooting](TROUBLESHOOTING.md)
-
-### I'm a Developer/Contributor
-1. Understand: [Architecture Deep Dive](ARCHITECTURE_DEEP_DIVE.md)
-2. Learn: [Component Interactions](ARCHITECTURE_DEEP_DIVE.md#component-interactions)
-3. Extend: [Extension Points](ARCHITECTURE_DEEP_DIVE.md#extension-points)
-
-### I Have a Problem
-1. Lookup: [Troubleshooting Quick Reference](TROUBLESHOOTING.md#quick-reference)
-2. Browse: [Specific Issue Category](TROUBLESHOOTING.md)
-3. Debug: [Debugging Techniques](TROUBLESHOOTING.md#debugging-techniques)
-
-### I Want to See Examples
-1. Real scenarios: [Examples](EXAMPLES.md)
-2. Workflows: [Workflows Section](EXAMPLES.md#example-1-onboarding-a-new-project)
-3. Anti-patterns: [What NOT to do](EXAMPLES.md#anti-patterns-what-not-to-do)
-
----
-
-## 📖 Documentation Structure
-
-```
-docs/
-├── index.md                    ← You are here
-├── COMPREHENSIVE_GUIDE.md      (5000+ lines, main reference)
-├── ARCHITECTURE_DEEP_DIVE.md   (2000+ lines, technical)
-├── TROUBLESHOOTING.md          (1500+ lines, problems & solutions)
-├── EXAMPLES.md                 (1500+ lines, real-world scenarios)
-└── [Legacy docs in subdirectories]
-```
-
----
-
-## 🔗 Related Documents
-
-- **README.md**: Project overview
-- **AGENT.md**: (deprecated, merged into SIMP.md)
-- **REMEDIATION_PLAN.md**: (historical, all issues now fixed)
-- **IMPLEMENTATION_PLAN.md**: (historical, implementation complete)
-
----
-
-## 💡 Key Features
+- [Concepts Overview](concepts/index.md)
+- [Current Architecture](concepts/architecture.md)
+
+### How To
+
+- [How To Overview](how-to/index.md)
+- [Advanced Capabilities](how-to/advanced-capabilities.md)
+- [Writing Rules](how-to/writing-rules.md)
+
+### Reference
+
+- [Command and File Reference](reference/index.md)
+- [Troubleshooting](TROUBLESHOOTING.md)
+
+### Examples
+
+- [Real-World Examples](EXAMPLES.md)
+
+## What SimpCode Is Best For
+
+- onboarding a real repository into a local, inspectable workflow
+- asking questions about a codebase without making changes
+- planning multi-step engineering work before editing
+- running bounded implementation tasks with verification
+- keeping session history and project memory available between runs
+- refreshing local wiki state after manual edits or merges
+
+## What SimpCode Is Not
+
+SimpCode is not a general-purpose shell replacement, and it is not designed for free-form command execution from the main user interface. The current model is intentionally focused: enter the interactive session, use slash commands for work, and let the workflow layer manage the project artifacts and execution flow.
+
+## Key Files in a Project
+
+- `SIMP.md`: the current project manifest and visible project snapshot.
+- `SPEC.md`: optional target-state requirements and constraints.
+- `.simp/wiki/`: the project knowledge base.
+- `.simp/sessions/`: saved session state.
+- `.simp/plans/`: persisted task plans.
+
+## Quick Decision Guide
+
+| If you want to... | Read this |
+|---|---|
+| Install or configure SimpCode | [Getting Started Overview](getting-started/overview.md) |
+| Learn the full workflow | [User Guide](guide.md) |
+| Understand the current architecture | [Current Architecture](concepts/architecture.md) |
+| Find a command or file path | [Reference](reference/index.md) |
+| Solve a runtime problem | [Troubleshooting](TROUBLESHOOTING.md) |
+| See a practical scenario | [Examples](EXAMPLES.md) |
+
+## Documentation Philosophy
+
+This documentation is written for real usage:
+
+- it explains the user flow before the internals
+- it assumes the current TUI-first architecture
+- it avoids legacy implementation language
+- it focuses on what to do, what SimpCode stores, and how to use it well on a real project
 
 | Feature | Details |
 |---------|---------|

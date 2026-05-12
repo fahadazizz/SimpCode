@@ -4,8 +4,6 @@ from pathlib import Path
 from typing import List, Tuple, Optional
 from simpcode.wiki.models import WikiPage, SourceReference
 from simpcode.utils.hashes import calculate_file_hash, calculate_range_hash
-from simpcode.core.paths import get_wiki_dir
-
 class WikiEngine:
     """
     SimpCode Wiki Engine: Orchestrates semantic persistence and self-healing.
@@ -13,7 +11,8 @@ class WikiEngine:
     """
     def __init__(self, project_root: Path):
         self.project_root = project_root
-        self.wiki_dir = get_wiki_dir()
+        self.wiki_dir = self.project_root / ".simp" / "wiki"
+        self.wiki_dir.mkdir(parents=True, exist_ok=True)
 
     def get_all_pages(self) -> List[WikiPage]:
         """
@@ -73,3 +72,39 @@ class WikiEngine:
 
     def is_page_stale(self, page: WikiPage) -> bool:
         return len(self.check_staleness(page)) > 0
+
+    def append_change_log(self, task_description: str, files_modified: List[str], rationale: str):
+        """
+        Appends an entry to the append-only changes.md semantic log (SDD 10.2).
+        """
+        import datetime
+        from simpcode.wiki.models import WikiPageMetadata
+        
+        page = self.get_page("changes")
+        if not page:
+            meta = WikiPageMetadata(
+                id="changes",
+                type="change",
+                last_updated=time.time(),
+                title="Semantic Change Log"
+            )
+            page = WikiPage(metadata=meta, content="# Semantic Change Log\n\nAppend-only record of system evolution.\n")
+            
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        entry = f"\n## {timestamp}\n"
+        entry += f"**Task**: {task_description}\n"
+        entry += f"**Rationale**: {rationale}\n"
+        if files_modified:
+            entry += "**Files Modified**:\n"
+            for f in files_modified:
+                entry += f"- `{f}`\n"
+        
+        content_parts = page.content.split("\n## ")
+        if len(content_parts) > 50:
+            page.content = content_parts[0] + "\n## " + "\n## ".join(content_parts[-49:]) + entry
+        else:
+            page.content += entry
+            
+        page.metadata.last_updated = time.time()
+        self.save_page(page)

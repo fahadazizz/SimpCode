@@ -76,6 +76,34 @@ class WikiBootstrap:
                 description=description[:200]
             ))
             
+        # 2.5 Write Symbol Pages (Phase 2)
+        import re
+        for sym_target in result.symbol_targets:
+            page_id = f"symbols/{sym_target}"
+            sources = []
+            # Shallow guess for symbol source file
+            for f in metadata.file_tree:
+                if f.endswith(".py") or f.endswith(".ts") or f.endswith(".js") or f.endswith(".rs") or f.endswith(".go"):
+                    # Check if file name matches symbol or if we want to just track the symbol
+                    if sym_target.lower() in f.lower():
+                        sources.append(SourceReference(
+                            file_path=f,
+                            hash=calculate_file_hash(str(self.root / f))
+                        ))
+                        break # Just map to first likely file
+                        
+            meta = WikiPageMetadata(
+                id=page_id, 
+                type="symbol", 
+                sources=sources,
+                last_updated=time.time(),
+                title=f"Symbol: {sym_target}"
+            )
+            content = f"# {sym_target}\n\nAuto-indexed symbol. Subject to deep-healing on first navigation.\n"
+            page_path = self.wiki_dir / f"{page_id}.md"
+            page_path.parent.mkdir(parents=True, exist_ok=True)
+            WikiPage(metadata=meta, content=content).to_file(page_path)
+            
         # 3. Initialize Project Index
         idx_manager = IndexManager(self.wiki_dir)
         idx_manager.update_index(module_entries, [], [])

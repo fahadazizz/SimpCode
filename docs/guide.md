@@ -1,263 +1,277 @@
 # SimpCode User Guide
 
-This is the canonical guide for using SimpCode in real projects.
+This is the canonical user guide for the current SimpCode experience.
 
-SimpCode is a task-oriented engineering assistant that does not rely on a single chat thread. It builds a semantic model of your repository, plans work before editing, verifies changes after every write, and continuously refreshes its understanding as the codebase changes.
+The important idea is straightforward: SimpCode is not a chat box with code completion. It is a local, project-aware engineering workflow that starts by learning your repository, then lets you research, plan, execute, and recover from inside a persistent terminal session.
 
-## What SimpCode Is Good At
+## Who This Guide Is For
 
-- understanding large or unfamiliar repositories
-- planning multi-step engineering work before making edits
-- applying changes with verification gates
-- remembering project structure through the Wiki
-- staying aligned with your project requirements while you work
+- developers onboarding a real repository into SimpCode
+- contributors who want the current workflow described clearly
+- teams that want predictable, reviewable terminal-based assistance
+- anyone who wants to know how to use the TUI well on a real project
 
-## The Core Mental Model
+## The User Journey
 
-SimpCode works with four layers of information:
+The normal flow looks like this:
 
-### 1. `SPEC.md` - what you want to build
-This is the authoritative project requirement file.
+1. install SimpCode into a Python environment
+2. configure a provider once with `simp setup`
+3. initialize a repository with `simp init`
+4. continue inside the TUI using slash commands
+5. save or return to sessions later if needed
+6. refresh the wiki after manual repository changes
 
-Use it for:
-- product goals
-- architecture intent
-- constraints and non-negotiables
-- performance, reliability, and security requirements
-- scope boundaries and success criteria
+That is the user-facing model. The rest of the guide explains why it works and how to use it well.
 
-Write `SPEC.md` when you want SimpCode to optimize toward a target state rather than only describe the current repository.
+## What SimpCode Actually Does
 
-### 2. `SIMP.md` - the project manifest
-This is the project-facing overview document.
+At a high level, SimpCode:
 
-Use it for:
-- the current project identity
-- architecture summary
-- major modules and responsibilities
-- implementation notes that should stay visible during work
+- reads the current repository and project metadata
+- keeps a local semantic wiki for project knowledge
+- uses `SIMP.md` and optional `SPEC.md` to stay aligned with your intent
+- assembles focused context instead of dumping the entire repository into the model
+- generates a plan before making changes
+- saves the task output and session state locally
+- refreshes the wiki when the repository changes
 
-In SimpCode, `SIMP.md` is the high-level companion to `SPEC.md`. Keep it readable, current, and concise.
+## The Core Files
 
-### 3. `.simp/wiki/` - the semantic knowledge base
-This is the system-managed memory layer.
+SimpCode uses a small set of local project artifacts:
 
-It stores:
-- module summaries
-- code relationships
-- learned patterns
-- risks and invariants
-- staleness-aware source references
+- `SIMP.md` is the visible project manifest.
+- `SPEC.md` is the optional target-state specification.
+- `.simp/wiki/` stores the project knowledge base.
+- `.simp/sessions/` stores saved TUI sessions.
+- `.simp/plans/` stores persisted task plans.
 
-You do not manually maintain the Wiki. SimpCode updates it as part of its indexing and learning loop.
+If you remember only one thing: the project artifacts live in your repository, not in a remote SimpCode account.
 
-### 4. `src/simpcode/core/prompts/` - internal system prompts
-These are SimpCode's internal reasoning assets.
+## Installation and First Launch
 
-They are not project docs and are not meant to be edited as part of normal project onboarding. If you are customizing SimpCode itself, these prompts matter; if you are using SimpCode on your own project, focus on `SPEC.md`, `SIMP.md`, and the Wiki.
-
-## How the System Works
-
-### 1. Onboarding
-When you run `simp init`, SimpCode:
-
-1. scans the repository structure
-2. builds `SIMP.md` and `SPEC.md`
-3. bootstraps the semantic Wiki
-4. indexes module relationships and useful entry points
-5. enters the interactive shell
-
-### 2. Research (`simp ask`)
-When you ask a question, SimpCode:
-
-1. loads the project context
-2. navigates the Wiki first
-3. reads targeted source snippets when needed
-4. answers based on the actual codebase, not guesses
-
-Use `ask` when you want to understand the repository without changing it.
-
-### 3. Planning and Execution (`simp do`)
-When you request a task, SimpCode:
-
-1. scans the repository context
-2. generates a structured implementation plan
-3. asks for approval unless you explicitly skip it
-4. executes the plan step by step
-5. verifies each write immediately
-6. updates the Wiki after changes
-
-Use `do` when you want SimpCode to modify code safely and systematically.
-
-### 4. Syncing (`simp sync`)
-If you or your team make manual changes outside SimpCode, run `simp sync` so the Wiki can catch up with the new reality on disk.
-
-## Setup
-
-### Prerequisites
-- Python 3.12 or newer
-- Git
-- an API key for at least one supported LLM provider
-
-### Install
-If you are contributing locally:
+You can use SimpCode from a local development checkout or from an installed package. For the local repository in this workspace, the simplest path is:
 
 ```bash
+cd /Volumes/DataDrive/SimpCode
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .
 ```
 
-### Configure
-Run:
+Then configure your provider:
 
 ```bash
 simp setup
 ```
 
-Choose a provider, model, and API key. Your config is stored locally in your SimpCode config directory.
-
-### Initialize a project
-From the repository you want SimpCode to work on:
+After setup, go to the repository you want SimpCode to work on and run:
 
 ```bash
 simp init
 ```
 
-That creates the project intelligence files and the semantic Wiki.
+`simp init` prepares the repository and then opens the interactive shell.
 
-## How to Use SimpCode Well on Real Projects
+## What Happens During Onboarding
 
-### Write a strong `SPEC.md`
-A good `SPEC.md` is the biggest quality multiplier.
+When you run `simp init`, SimpCode:
 
-Include:
-- business goals
-- the problem being solved
+1. identifies the repository root
+2. collects project metadata
+3. writes or refreshes `SIMP.md`
+4. writes `SPEC.md` if the onboarding output includes specification content
+5. creates the `.simp/wiki/` index and initial knowledge base
+6. opens the TUI so you can start working immediately
+
+If a project is already onboarded, `simp init` behaves as a refresh entry point and takes you back into the interactive workflow.
+
+## How the TUI Works
+
+The TUI is the main interface now.
+
+- Type a slash command to perform a structured action.
+- Type regular text to start a normal chat turn.
+- Use `/help` if you need the command list.
+- Use `/exit` to save the current session and quit.
+
+The shell is intentionally simple. It is not trying to be a desktop application. It is a focused terminal workspace for project reasoning and implementation.
+
+### The Main Command Pattern
+
+This is the recommended shape:
+
+```text
+/ask what does the auth layer currently do?
+/do add input validation for the user API --dry-run
+/status
+/wiki list
+/sessions
+```
+
+Anything that does not begin with `/` is treated as a regular chat turn and runs through the current session context.
+
+## Working Modes
+
+### Research Mode
+
+Use `/ask` when you want a technical explanation or a repository question answered without making changes.
+
+Examples:
+
+```text
+/ask where is session state persisted?
+/ask how does the wiki stay in sync?
+/ask which files define the public command interface?
+```
+
+This mode is useful when you want to learn the current shape of the codebase before taking action.
+
+### Task Mode
+
+Use `/do` when you want SimpCode to plan and execute a bounded change.
+
+Examples:
+
+```text
+/do add a retry strategy for provider failures
+/do refactor the command parsing to be easier to test --dry-run
+/do update the session list output to show more useful previews --yes
+```
+
+Task mode is the safest place to ask for code changes because it starts from context, generates a plan, and persists the result.
+
+### Maintenance Mode
+
+Use maintenance commands when the repository changed outside SimpCode or when you need to inspect the current state.
+
+- `/sync` refreshes wiki knowledge after manual edits or big merges.
+- `/status` shows the repository and wiki health summary.
+- `/recover` loads the latest recoverable plan artifact.
+- `/sessions` shows saved sessions and lets you switch between them.
+
+## Project Planning and Execution
+
+The workflow layer uses a predictable structure:
+
+1. collect repository context
+2. assemble the most relevant wiki and source snippets
+3. generate a plan for the requested task
+4. ask for approval unless you explicitly skip it
+5. execute the plan step by step
+6. save the plan and session state locally
+7. update the wiki and local knowledge after the task
+
+This is why SimpCode feels different from a normal chat assistant. It is not only answering; it is operating inside a project lifecycle.
+
+## How to Use `SPEC.md`
+
+`SPEC.md` is optional, but it is powerful.
+
+Use it when you want SimpCode to optimize toward an explicit target state:
+
+- product requirements
+- constraints that should not be broken
 - architecture boundaries
-- allowed and disallowed changes
-- scalability and reliability targets
-- success metrics
+- acceptance criteria
+- testing and quality expectations
 
-Keep it specific. The more concrete the specification, the better SimpCode can reason about tradeoffs.
+If your repository has a clear direction, `SPEC.md` should describe the destination in language a human reviewer would approve.
 
-### Keep `SIMP.md` readable
-Treat `SIMP.md` as the project overview, not a giant dump of every detail.
+### Good `SPEC.md` content
 
-Good content:
-- a short identity section
-- architecture summary
-- module responsibilities
-- important entry points
-- operational notes
+- what the system should do
+- what the system must not do
+- what must remain stable during the change
+- what counts as complete
+- what must be verified afterward
 
-Avoid turning it into a second specification file.
+### Bad `SPEC.md` content
 
-### Review every plan
-SimpCode is safest when you inspect the generated plan before execution.
+- vague goals with no acceptance criteria
+- one-off task instructions that belong in a slash command
+- internal implementation details that are not actually project requirements
 
-Check:
-- whether the target files are correct
-- whether the verification step is meaningful
-- whether the scope is too broad
-- whether the task should be broken into smaller steps
+## How to Use `SIMP.md`
 
-### Use explicit file and module references
-The more precise your task, the better the result.
+`SIMP.md` should stay readable and useful to a human. Think of it as the project snapshot SimpCode and your team can refer to while working.
+
+Strong `SIMP.md` entries usually include:
+
+- repository purpose
+- major folders and their responsibilities
+- important conventions
+- entry points and operational notes
+- any current constraints the team should remember
+
+Do not treat it as a log dump. It should be concise enough that someone can actually use it.
+
+## Sessions and Recovery
+
+SimpCode keeps sessions locally so you can return to work later.
+
+- `/sessions` shows saved sessions.
+- `/sessions --switch <id>` loads another session.
+- `/recover` reloads the most recent persisted plan when you need to continue from a previous task.
+
+This is especially useful when you are working on a multi-step repository change over more than one sitting.
+
+## Best Practices That Matter
+
+### Be specific
+
+The more precise your request, the better the result.
 
 Good:
-- "Add retry logic in `src/simpcode/harness/tools.py`"
-- "Update the planning flow to include `SPEC.md` requirements"
-- "Refactor the Wiki bootstrap to support project-specific skills"
 
-Weak:
-- "Make it better"
-- "Fix the architecture"
+```text
+/do add a provider-aware status display to the interactive shell
+```
 
-### Keep the Wiki fresh
-Run `simp sync` when:
-- you change many files manually
-- you merge a large branch
-- SimpCode appears to be reasoning from stale context
+Less useful:
 
-### Use skills when a project needs specialized behavior
-SimpCode can load project-specific or global skills from the configured skills directories.
+```text
+/do make it better
+```
 
-Use skills for:
-- special workflows
-- domain-specific formatting
-- language-specific conventions
-- repeatable project practices
+### Keep tasks bounded
 
-## How to Make SimpCode More Productive on Complex Projects
+Try to request one meaningful change at a time. Large tasks are fine, but they should still have a clear end point.
 
-### 1. Start with a precise SPEC
-Large projects fail when requirements are vague.
+### Use the wiki as a sanity check
 
-Good SPEC content includes:
-- architecture goals
-- data flow expectations
-- module ownership
-- external integrations
-- testing and deployment constraints
+When you are not sure how the repository is structured, ask first. The research path exists to reduce wrong edits.
 
-### 2. Split large work into focused missions
-If the task touches many files or subsystems, break it into smaller missions.
+### Sync after manual changes
 
-This keeps plans safer, context smaller, and verification more reliable.
+If you changed files directly, run `/sync` before asking SimpCode for a new task. That keeps the local knowledge consistent with the code on disk.
 
-### 3. Keep a tight approval loop
-Approve only plans that are:
-- bounded
-- testable
-- scoped to the actual requirement
-- measurable
+### Review plans before approving
 
-### 4. Use the Wiki as a reality check
-When SimpCode says something about the repository, trust the Wiki-backed answer over a vague memory.
+The generated plan is your chance to catch scope problems early. If the plan is too wide, narrow the task and try again.
 
-### 5. Treat `SIMP.md` as a communication layer
-It helps SimpCode and humans stay aligned on what the repository is and how it is structured.
+## When SimpCode Works Best
 
-### 6. Treat internal prompts as implementation details
-If you are using SimpCode as a tool on your own project, the prompt files are not something you normally edit.
+SimpCode is strongest when the repository is:
 
-If you are extending SimpCode itself, then the prompt folder becomes part of the framework codebase and should be maintained with the same discipline as the rest of the runtime.
+- real enough to have structure
+- large enough that context matters
+- stable enough that local memory is useful
+- worked on repeatedly over time
 
-## Common Workflows
+That is exactly the sort of environment where a persistent project memory pays off.
 
-### New repository onboarding
-1. create `SPEC.md`
-2. run `simp init`
-3. review the generated `SIMP.md`
-4. inspect the initial Wiki pages
-5. run `simp ask` on a structural question
-6. try a small `simp do` task
+## When to Stop and Reframe
 
-### Feature work
-1. update `SPEC.md` if the feature changes the target architecture
-2. ask SimpCode to research relevant modules
-3. review the generated plan
-4. execute the plan in small steps
-5. run `simp sync` if you changed files manually
+If you notice that a task description is too broad, split it into separate slash commands. If you are missing requirements, write them into `SPEC.md` first. If the repository changed outside SimpCode, sync before continuing.
 
-### Refactoring a large module
-1. write down the desired result in `SPEC.md`
-2. ask for a plan that isolates the affected files
-3. approve a narrow scope
-4. verify after each write
-5. use `simp sync` after the refactor if needed
+## What to Read Next
 
-## Troubleshooting
-
-### SimpCode seems to miss recent changes
-- run `simp sync`
-- confirm the files were actually saved
-- check whether the Wiki page is stale
-
-### The plan is too broad
-- clarify the SPEC
-- break the task into smaller steps
+- [Getting Started Overview](getting-started/overview.md)
+- [Current Architecture](concepts/architecture.md)
+- [Command Reference](reference/index.md)
+- [Examples](EXAMPLES.md)
+- [Troubleshooting](TROUBLESHOOTING.md)
 - point to exact files or modules
 
 ### The task feels under-specified

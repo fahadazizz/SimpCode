@@ -65,16 +65,22 @@ _install_optional_sdk_stubs()
 
 from simpcode.core.analyzer import ProjectAnalyzer
 from simpcode.core.evolution import EvolutionProposals, GetBetter
+from simpcode.core.executor import TakeAction
 from simpcode.core.generator import DocumentGenerator, SynthesizedDocs, IntelligenceSynthesizer
 from simpcode.core.onboarding import ensure_onboarding_artifacts, needs_onboarding
 from simpcode.core.modes import ScanScene
 from simpcode.core.planner import ArchitectResponse, ContextRequest, Plan, PlanStep, PlanGenerator
+from simpcode.core.config import LLMProviderConfig, SimpConfig, global_config
+from simpcode.core.llm.client import LLMClient
 from simpcode.harness.budgeter import ContextBudgeter, ContextItem
 from simpcode.harness.tools import ToolHarness
 from simpcode.utils.hashes import calculate_file_hash
 from simpcode.core.llm.openai_provider import OpenAICompatibleProvider
+from simpcode.cli.shell import SimpShell
+from simpcode.core.workflows import SimpWorkflows
 from simpcode.wiki.bootstrap import WikiBootstrap
 from simpcode.wiki.engine import WikiEngine
+from simpcode.wiki.index import IndexEntry, IndexManager
 from simpcode.wiki.models import SourceReference, WikiPage, WikiPageMetadata
 
 
@@ -165,8 +171,7 @@ def temp_root(tmp_path):
 @pytest.fixture()
 def patch_wiki_dir(monkeypatch, temp_root):
     wiki_dir = temp_root / ".simp" / "wiki"
-    monkeypatch.setattr("simpcode.wiki.engine.get_wiki_dir", lambda: wiki_dir)
-    monkeypatch.setattr("simpcode.core.evolution.get_wiki_dir", lambda: wiki_dir)
+    monkeypatch.setattr("simpcode.core.paths.get_wiki_dir", lambda: wiki_dir)
     return wiki_dir
 
 
@@ -208,10 +213,10 @@ def test_tool_harness_patch_file_accepts_whitespace_variants(temp_root, patch_wi
     assert code_file.read_text() == "def add(a, b):\n    return a - b\n\n"
 
 
-def test_tool_harness_run_shell_supports_pipes(temp_root, patch_wiki_dir):
+def test_tool_harness_run_shell_blocks_dangerous_operators(temp_root, patch_wiki_dir):
     harness = ToolHarness(temp_root, ["calc.py"])
     output = harness.run_shell("printf 'alpha\\nbeta\\n' | grep beta")
-    assert "beta" in output
+    assert "Security Violation: shell operators are prohibited" in output
 
 
 def test_context_budgeter_emits_warning_and_keeps_mandatory(monkeypatch):
@@ -351,13 +356,13 @@ def test_get_better_includes_spec_and_writes_changes_log(temp_root, patch_wiki_d
     assert "Captured migration pattern" in (patch_wiki_dir / "changes.md").read_text()
 
 
-def test_document_generator_writes_simp_and_spec(temp_root):
+def test_document_generator_writes_spec_and_skips_simp(temp_root):
     generator = DocumentGenerator(temp_root)
-    docs = SynthesizedDocs(simp_md="# SIMP\n", spec_md="")
+    docs = SynthesizedDocs(simp_md="# SIMP\n", spec_md="# SPEC\n")
     generator.write_docs(docs)
 
-    assert (temp_root / "SIMP.md").read_text() == "# SIMP\n"
-    assert not (temp_root / "SPEC.md").exists()
+    assert not (temp_root / "SIMP.md").exists()
+    assert (temp_root / "SPEC.md").read_text() == "# SPEC\n"
 
 
 def test_onboarding_helper_creates_missing_docs_and_index(temp_root):
@@ -372,8 +377,87 @@ def test_onboarding_helper_creates_missing_docs_and_index(temp_root):
     ensure_onboarding_artifacts(temp_root, docs, metadata)
 
     assert (temp_root / "SIMP.md").exists()
+    assert "Owner: User" in (temp_root / "SIMP.md").read_text()
     assert (temp_root / ".simp" / "wiki" / "index.md").exists()
     assert not (temp_root / "SPEC.md").exists()
+
+
+def test_onboarding_preserves_existing_spec_when_synthesis_is_empty(temp_root):
+    spec_path = temp_root / "SPEC.md"
+    spec_path.write_text("# Existing SPEC\nKeep me\n")
+    docs = SynthesizedDocs(simp_md="", spec_md="")
+    metadata = SimpleNamespace(
+        name="agentic-chatbot",
+        root=str(temp_root),
+        file_tree=["README.md", "src/app.py", "tests/test_app.py"],
+    )
+
+    ensure_onboarding_artifacts(temp_root, docs, metadata)
+
+    assert spec_path.read_text() == "# Existing SPEC\nKeep me\n"
+
+
+def test_onboarding_preserves_existing_simp_when_synthesis_is_empty(temp_root):
+    simp_path = temp_root / "SIMP.md"
+    simp_path.write_text("# Existing SIMP\nKeep me\n")
+    docs = SynthesizedDocs(simp_md="", spec_md="")
+    metadata = SimpleNamespace(
+        name="agentic-chatbot",
+        root=str(temp_root),
+        file_tree=["README.md", "src/app.py", "tests/test_app.py"],
+    )
+
+    ensure_onboarding_artifacts(temp_root, docs, metadata)
+
+    assert simp_path.read_text() == "# Existing SIMP\nKeep me\n"
+
+
+def test_workflows_update_simp_requires_explicit_command(monkeypatch, temp_root):
+    monkeypatch.setattr("simpcode.core.workflows.get_project_root", lambda: temp_root)
+    monkeypatch.setattr(
+        ProjectAnalyzer,
+        "collect_metadata",
+        lambda self: SimpleNamespace(
+            name="agentic-chatbot",
+            root=str(temp_root),
+            file_tree=["README.md", "src/app.py"],
+            manifests=["pyproject.toml"],
+        ),
+    )
+
+    draft = SimpleNamespace(simp_md="# SIMP\n\nOwner: User\nExplicit rule: keep it concise.\n")
+    monkeypatch.setattr(SimpWorkflows, "_make_llm", lambda self, provider=None, model=None: DummyLLM(responses=[draft]))
+
+    workflow = SimpWorkflows()
+    result = workflow.update_simp("Add explicit rule", approval_prompt=lambda _: "y")
+
+    assert "Explicit rule: keep it concise." in result
+    assert "Explicit rule: keep it concise." in (temp_root / "SIMP.md").read_text()
+
+
+def test_workflows_update_simp_can_be_cancelled(monkeypatch, temp_root):
+    monkeypatch.setattr("simpcode.core.workflows.get_project_root", lambda: temp_root)
+    monkeypatch.setattr(
+        ProjectAnalyzer,
+        "collect_metadata",
+        lambda self: SimpleNamespace(
+            name="agentic-chatbot",
+            root=str(temp_root),
+            file_tree=["README.md", "src/app.py"],
+            manifests=["pyproject.toml"],
+        ),
+    )
+
+    simp_path = temp_root / "SIMP.md"
+    simp_path.write_text("# Existing SIMP\nKeep me\n")
+    draft = SimpleNamespace(simp_md="# SIMP\n\nOwner: User\nExplicit rule: keep it concise.\n")
+    monkeypatch.setattr(SimpWorkflows, "_make_llm", lambda self, provider=None, model=None: DummyLLM(responses=[draft]))
+
+    workflow = SimpWorkflows()
+    result = workflow.update_simp("Add explicit rule", approval_prompt=lambda _: "n")
+
+    assert result == "# Existing SIMP\nKeep me\n"
+    assert simp_path.read_text() == "# Existing SIMP\nKeep me\n"
 
 
 def test_openai_compatible_structured_output_tolerates_trailing_noise(monkeypatch):
@@ -385,6 +469,217 @@ def test_openai_compatible_structured_output_tolerates_trailing_noise(monkeypatc
 
     result = provider.structured_output("prompt", DemoSchema, "system")
     assert result.value == 7
+
+
+def test_llm_client_uses_saved_ollama_base_url(monkeypatch):
+    config = SimpConfig(
+        active_provider="ollama",
+        providers={
+            "ollama": LLMProviderConfig(
+                provider="ollama",
+                model_id="llama3.1",
+                api_key="local",
+                base_url="http://ollama.internal:11434/v1",
+            )
+        },
+    )
+    monkeypatch.setattr(global_config, "config", config)
+
+    client = LLMClient()
+
+    assert client.provider_name == "ollama"
+    assert client.model_id == "llama3.1"
+    assert client.base_url == "http://ollama.internal:11434/v1"
+    assert client.provider.base_url == "http://ollama.internal:11434/v1"
+
+
+def test_llm_client_refresh_picks_up_changed_provider_config(monkeypatch):
+    first = SimpConfig(
+        active_provider="ollama",
+        providers={
+            "ollama": LLMProviderConfig(
+                provider="ollama",
+                model_id="model-a",
+                api_key="key-a",
+                base_url="http://localhost:11434/v1",
+            )
+        },
+    )
+    second = SimpConfig(
+        active_provider="ollama",
+        providers={
+            "ollama": LLMProviderConfig(
+                provider="ollama",
+                model_id="model-b",
+                api_key="key-b",
+                base_url="http://ollama.changed:11434/v1",
+            )
+        },
+    )
+
+    monkeypatch.setattr(global_config, "config", first)
+    client = LLMClient()
+
+    monkeypatch.setattr(global_config, "config", second)
+    client.refresh()
+
+    assert client.model_id == "model-b"
+    assert client.api_key == "key-b"
+    assert client.base_url == "http://ollama.changed:11434/v1"
+    assert client.provider.base_url == "http://ollama.changed:11434/v1"
+
+
+def test_shell_refresh_llm_rebuilds_from_current_session_state(monkeypatch):
+    monkeypatch.setattr(
+        global_config,
+        "config",
+        SimpConfig(
+            active_provider="groq",
+            providers={
+                "groq": LLMProviderConfig(
+                    provider="groq",
+                    model_id="groq-model",
+                    api_key="groq-key",
+                )
+            },
+        ),
+    )
+
+    shell = SimpShell.__new__(SimpShell)
+    shell.state = SimpleNamespace(current_provider="groq", current_model="groq-model")
+
+    client = shell._refresh_llm()
+    assert client.provider_name == "groq"
+    assert client.model_id == "groq-model"
+
+    shell.state.current_provider = "ollama"
+    shell.state.current_model = "ollama-model"
+    monkeypatch.setattr(
+        global_config,
+        "config",
+        SimpConfig(
+            active_provider="ollama",
+            providers={
+                "ollama": LLMProviderConfig(
+                    provider="ollama",
+                    model_id="ollama-model",
+                    api_key="local",
+                    base_url="http://ollama.example:11434/v1",
+                )
+            },
+        ),
+    )
+
+    refreshed = shell._refresh_llm()
+    assert refreshed.provider_name == "ollama"
+    assert refreshed.model_id == "ollama-model"
+    assert refreshed.base_url == "http://ollama.example:11434/v1"
+
+
+def test_executor_stops_when_step_verification_fails(monkeypatch, temp_root):
+    class FakeHarness:
+        def __init__(self, root, allowed_files):
+            self.root = root
+            self.allowed_files = allowed_files
+            self.shell_calls = []
+            self.writes = []
+
+        def read_file(self, file_path):
+            return "file contents"
+
+        def write_file(self, file_path, content):
+            self.writes.append((file_path, content))
+
+        def patch_file(self, file_path, old_string, new_string):
+            self.writes.append((file_path, new_string))
+
+        def run_shell(self, command):
+            self.shell_calls.append(command)
+            if command.startswith("flake8"):
+                return ""
+            return "EXECUTION FAILURE (Code 1):\nverification failed"
+
+    class FakeLLM:
+        def __init__(self):
+            self.calls = 0
+
+        def structured_output(self, prompt, schema, system_instruction):
+            self.calls += 1
+            if self.calls > 1:
+                raise AssertionError("executor should stop after verification failure")
+            return SimpleNamespace(
+                tool="write_file",
+                args={"path": "src/app.py", "content": "print('updated')\n"},
+                thought="write the file",
+                complete=False,
+            )
+
+    monkeypatch.setattr("simpcode.core.executor.ToolHarness", FakeHarness)
+
+    fake_llm = FakeLLM()
+    executor = TakeAction(temp_root, fake_llm, session_id="sess-test")
+    plan = Plan(
+        task_id="task-test",
+        rationale="test",
+        steps=[
+            PlanStep(
+                id=1,
+                target="src/app.py",
+                action="edit",
+                rationale="update app",
+                verification="pytest -q",
+            )
+        ],
+        scope_exclusions=[],
+        risk_level="medium",
+    )
+
+    trace = executor.execute(plan, "context")
+
+    assert "verification failed" in trace.lower()
+    assert fake_llm.calls == 1
+
+
+def test_wiki_engine_uses_project_root_even_if_global_helper_is_wrong(monkeypatch, temp_root):
+    actual_wiki_dir = temp_root / ".simp" / "wiki"
+    actual_wiki_dir.mkdir(parents=True, exist_ok=True)
+    (actual_wiki_dir / "modules").mkdir(exist_ok=True)
+    wrong_wiki_dir = temp_root / "elsewhere" / "wiki"
+    monkeypatch.setattr("simpcode.core.paths.get_wiki_dir", lambda: wrong_wiki_dir)
+
+    page = WikiPage(
+        metadata=WikiPageMetadata(
+            id="modules/app",
+            type="module",
+            sources=[],
+            last_updated=1.0,
+            title="App",
+        ),
+        content="# App\n",
+    )
+    page.to_file(actual_wiki_dir / "modules/app.md")
+
+    engine = WikiEngine(temp_root)
+    loaded = engine.get_page("modules/app")
+
+    assert loaded is not None
+    assert loaded.metadata.id == "modules/app"
+
+
+def test_index_manager_renders_decision_links_cleanly(temp_root):
+    wiki_dir = temp_root / ".simp" / "wiki"
+    wiki_dir.mkdir(parents=True, exist_ok=True)
+    manager = IndexManager(wiki_dir, token_budget=2000)
+
+    manager.update_index(
+        modules=[IndexEntry(name="app", type="module", path="modules/app", description="App module")],
+        decisions=[IndexEntry(name="decision-1", type="decision", path="decisions/decision-1", description="Keep the API stable")],
+        hotspots=["src/app.py"],
+    )
+
+    content = (wiki_dir / "index.md").read_text()
+    assert "[[decisions/decision-1|decision-1]]" in content
+    assert "IndexEntry" not in content
 
 
 @pytest.mark.parametrize(

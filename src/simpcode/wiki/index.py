@@ -29,7 +29,7 @@ class IndexManager:
         """
         # 1. Build sections independently
         module_lines = ["## Modules"] + [f"- [[{m.path}|{m.name}]]: {m.description or ''}" for m in modules]
-        decision_lines = ["\n## Decisions"] + [f"- [[decisions/{d}|{d}]]" for d in decisions]
+        decision_lines = ["\n## Decisions"] + [f"- [[{d.path}|{d.name}]]: {d.description or ''}" for d in decisions]
         hotspot_lines = ["\n## Hotspots"] + [f"- {h}" for h in hotspots]
         
         header = "# Project Index\n\nThis is the high-level map of the codebase. Navigation should start here.\n\n"
@@ -59,3 +59,42 @@ class IndexManager:
         )
         page = WikiPage(metadata=metadata, content=final_content)
         page.to_file(self.index_path)
+
+    def update_hotspots(self, new_hotspots: List[str]):
+        """
+        Updates the hotspots section of the index while preserving other sections.
+        """
+        if not self.index_path.exists():
+            return
+            
+        page = WikiPage.from_file(self.index_path)
+        content = page.content
+        
+        # Parse existing hotspots
+        hotspot_section = False
+        other_content = []
+        current_hotspots = []
+        
+        for line in content.split("\n"):
+            if line.startswith("## Hotspots"):
+                hotspot_section = True
+                continue
+            if line.startswith("## ") and hotspot_section:
+                hotspot_section = False # Shouldn't happen given trimming order, but safe
+            
+            if hotspot_section:
+                if line.strip().startswith("- "):
+                    current_hotspots.append(line.strip()[2:])
+            else:
+                other_content.append(line)
+                
+        # Merge, keeping 10 most recent
+        all_hotspots = new_hotspots + [h for h in current_hotspots if h not in new_hotspots]
+        all_hotspots = all_hotspots[:10]
+        
+        hotspot_lines = ["\n## Hotspots"] + [f"- {h}" for h in all_hotspots]
+        
+        page.content = "\n".join(other_content).strip() + "\n" + "\n".join(hotspot_lines)
+        page.metadata.last_updated = time.time()
+        page.to_file(self.index_path)
+
