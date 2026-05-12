@@ -30,8 +30,8 @@ class ContextBudgeter:
         assembled_content = []
         current_tokens = 0
         
-        # 1. Load Mandatory (SIMP.md, AGENT.md, index.md)
-        # Mandatory items are NEVER dropped per Spec 14.1
+        # 1. Load Baseline Context (SIMP.md, index.md, optional SPEC.md)
+        # Baseline items are NEVER dropped per Spec 14.1
         mandatory_sorted = sorted(mandatory, key=lambda x: x.priority)
         for item in mandatory_sorted:
             header = f"--- MANDATORY: {item.id} ---\n"

@@ -1,12 +1,12 @@
-# Deep Dive: Writing High-Quality Rules in AGENT.md
+# Deep Dive: Writing a Strong SPEC.md
 
-`AGENT.md` is the most powerful tool for ensuring SimpCode writes code that "looks like yours." While the Semantic Wiki provides context, `AGENT.md` provides **intent**.
+`SPEC.md` is the most powerful tool for ensuring SimpCode builds toward the project you actually want. While the Semantic Wiki provides context, `SPEC.md` provides **intent**.
 
 ---
 
-## Structure of an Effective AGENT.md
+## Structure of an Effective SPEC.md
 
-A good `AGENT.md` acts as a condensed Style Guide. It should be written as a series of **immutable constraints**.
+A good `SPEC.md` acts as a compact product and architecture contract. It should be written as a series of **clear requirements**.
 
 ### 1. General Principles
 Define the high-level philosophy of the codebase.
@@ -32,7 +32,7 @@ Define how the AI should explain its work.
 *   *Good*: "Avoid nested if-statements. Use early returns and guard clauses."
 
 ### Including Temporary Tasks
-`AGENT.md` is for **permanent rules**. For one-off tasks, use the `simp do` command argument.
+`SPEC.md` is for **project-defining requirements**. For one-off tasks, put the requirement directly in the `simp do` command or update the relevant section of `SPEC.md` first.
 *   *Bad*: "Next update: rename all files to lowercase." (Put this in a `simp do` command instead).
 
 ### Conflicting with the Tech Stack
@@ -40,7 +40,7 @@ Ensure your rules don't ask for a pattern that the current libraries don't suppo
 
 ---
 
-## Example AGENT.md for a Fast-API Project
+## Example SPEC.md for a FastAPI Project
 
 ```markdown
 # Agent Instructions: SimpProject
@@ -62,4 +62,4 @@ Ensure your rules don't ask for a pattern that the current libraries don't suppo
 ---
 
 ## How SimpCode Uses This
-For every turn of every mission, SimpCode reads `AGENT.md`. It is processed by the **Policy Engine** before the AI generates any code. If a generated snippet violates a rule in `AGENT.md`, the AI's internal reasoning loop identifies the conflict and regenerates the response.
+For every turn of every mission, SimpCode reads `SPEC.md` and the semantic Wiki. The internal prompt layer then uses those requirements before the AI generates any code. If a generated snippet conflicts with the specification, the reasoning loop identifies the mismatch and regenerates the response.

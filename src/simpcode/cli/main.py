@@ -13,6 +13,7 @@ load_dotenv()
 from simpcode.core.paths import get_project_root, get_wiki_dir, get_plans_dir
 from simpcode.core.analyzer import ProjectAnalyzer
 from simpcode.core.generator import IntelligenceSynthesizer, DocumentGenerator
+from simpcode.core.onboarding import needs_onboarding, ensure_onboarding_artifacts
 from simpcode.core.llm import LLMClient
 from simpcode.core.modes import ScanScene
 from simpcode.core.planner import PlanGenerator, Plan
@@ -80,7 +81,7 @@ def init():
     bootstrap = WikiBootstrap(llm, root)
     
     try:
-        if not (root / ".simp").exists():
+        if needs_onboarding(root):
             with console.status("[bold blue]Collecting codebase metadata..."):
                 metadata = analyzer.collect_metadata()
             
@@ -89,11 +90,17 @@ def init():
                 generator.write_docs(docs)
                 
             with console.status("[bold blue]Compiling Initial Wiki (Semantic Core)..."):
-                bootstrap.run(metadata)
+                try:
+                    bootstrap.run(metadata)
+                except Exception as bootstrap_error:
+                    console.print(f"[yellow]Wiki bootstrap degraded:[/yellow] {bootstrap_error}")
+
+            ensure_onboarding_artifacts(root, docs, metadata)
             
             console.print("\n[bold green]✓ Mission Establishment Complete.[/bold green]")
             console.print(" - [cyan]SIMP.md[/cyan] (Project Intelligence)")
-            console.print(" - [cyan]AGENT.md[/cyan] (Behavioral Rules)")
+            if (root / "SPEC.md").exists():
+                console.print(" - [cyan]SPEC.md[/cyan] (Optional Project Requirements)")
             console.print(" - [cyan].simp/wiki/[/cyan] (Knowledge Base)")
         
         # Always transition to chat/TUI on 'simp init'

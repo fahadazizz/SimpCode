@@ -29,28 +29,30 @@ Use `ask` for architectural discovery without making changes.
 
 ---
 
-## Customizing Agent Behavior (`AGENT.md`)
+## Writing a Strong `SPEC.md`
 
-Every project has unique "unwritten rules." Put them in `AGENT.md` to ensure SimpCode behaves like a member of your team.
+Every project needs a clear target state. Put that in `SPEC.md` so SimpCode knows what success looks like.
 
-### Pro-Tips for `AGENT.md`:
-- **Coding Style**: "Always use single quotes for strings and 4-space indentation."
-- **Forbidden Libraries**: "Never use `requests`; always use `httpx` for async operations."
-- **Testing Requirements**: "Every new function must have a corresponding test case in the `tests/` directory."
-- **Documentation Rules**: "Write Google-style docstrings for all public methods."
+### Good `SPEC.md` content:
+- **Architecture Goals**: What shape should the system have?
+- **Constraints**: What must never change?
+- **Acceptance Criteria**: How do we know the task is done?
+- **Quality Targets**: Performance, security, reliability, and scalability goals.
+- **Scope Boundaries**: What is explicitly out of scope?
 
+For the full workflow and real-world examples, read the [SimpCode User Guide](../guide.md).
 ---
 
 ## Keeping Knowledge Fresh (`simp sync`)
 
-If you or your team make significant manual changes to the codebase (e.g., merging a large PR or refactoring a directory), SimpCode's Wiki will be outdated.
+If you or your team make significant manual changes to the codebase, the Wiki can become stale.
 
 ### When to run `sync`:
-- After a `git pull`.
-- After manually deleting files.
-- Before starting a large, multi-file `do` task.
+- after a `git pull`
+- after manually deleting files
+- before starting a large multi-file `do` task
 
-Running `simp sync` forces a re-index of the repository, ensuring the AI's "Mental Model" matches the reality on disk.
+Running `simp sync` forces a re-index of the repository so the AI's mental model matches the reality on disk.
 
 ---
 

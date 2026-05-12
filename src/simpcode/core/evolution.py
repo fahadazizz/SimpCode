@@ -25,13 +25,23 @@ class GetBetter:
 
     def run(self, task: str, execution_trace: str):
         system_instruction = registry.load("staff_researcher")
-        prompt = f"""TASK INTENT: {task}
+        # Include SPEC.md when present so learned proposals can align to explicit user requirements.
+        spec_text = ""
+        try:
+            spec_path = self.root / "SPEC.md"
+            if spec_path.exists():
+                spec_text = spec_path.read_text()
+                if len(spec_text) > 2000:
+                    spec_text = spec_text[:2000] + "\n... (truncated SPEC.md)"
+        except Exception:
+            spec_text = ""
 
-EXECUTION TRACE:
-{execution_trace}
+        prompt = registry.load("staff_researcher_learning", include_base=False).format(
+            spec_text=spec_text,
+            task=task,
+            execution_trace=execution_trace,
+        )
 
-Extract high-integrity knowledge proposals.
-"""
         proposals = self.llm.structured_output(prompt, EvolutionProposals, system_instruction)
         
         # 1. Update changes.md (Structural update is automatic)
@@ -78,16 +88,12 @@ Extract high-integrity knowledge proposals.
         from pydantic import BaseModel
         class MergedContent(BaseModel):
             content: str
-            
-        prompt = f"""You are a knowledge refinement agent.
-        
-CURRENT COGNITIVE LAYER ({title}):
-{current_content}
 
-NEW PROPOSED ITEMS:
-{items}
-
-Merge the new items into the current layer intelligently. Deduplicate similar ideas, group logically, and keep it concise. Return ONLY the new full markdown content."""
+        prompt = registry.load("wiki_cognitive_merge", include_base=False).format(
+            title=title,
+            current_content=current_content,
+            items=items,
+        )
         
         try:
             result = self.llm.structured_output(prompt, MergedContent, "You are a technical document writer preserving project wisdom.")

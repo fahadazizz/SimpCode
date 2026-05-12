@@ -33,14 +33,12 @@ class WikiBootstrap:
 
     def run(self, metadata: ProjectMetadata):
         system_instruction = registry.load("wiki_librarian")
-        prompt = f"""RAW PROJECT METADATA:
-Root: {metadata.root}
-File Tree: {metadata.file_tree}
-Manifests: {metadata.manifests}
-Entry Point Samples: {metadata.entry_point_samples}
-
-Generate the BootstrapResult.
-"""
+        prompt = registry.load("wiki_bootstrap", include_base=False).format(
+            root=metadata.root,
+            file_tree=metadata.file_tree,
+            manifests=metadata.manifests,
+            entry_point_samples=metadata.entry_point_samples,
+        )
         result = self.llm.structured_output(prompt, BootstrapResult, system_instruction)
         
         # 1. Write Cognitive Pages

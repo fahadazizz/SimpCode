@@ -7,7 +7,7 @@ from simpcode.core.prompts import registry
 
 class SynthesizedDocs(BaseModel):
     simp_md: str
-    agent_md: str
+    spec_md: str
 
 class IntelligenceSynthesizer:
     """
@@ -18,18 +18,12 @@ class IntelligenceSynthesizer:
 
     def synthesize(self, metadata: ProjectMetadata) -> SynthesizedDocs:
         system_instruction = registry.load("onboarding_architect")
-        prompt = f"""Raw Project Metadata:
-Project Name: {metadata.name}
-File Tree: {metadata.file_tree}
-
-Manifests:
-{metadata.manifests}
-
-Entry Point Samples:
-{metadata.entry_point_samples}
-
-Synthesize the SIMP.md and AGENT.md content.
-"""
+        prompt = registry.load("onboarding_documents", include_base=False).format(
+            project_name=metadata.name,
+            file_tree=metadata.file_tree,
+            manifests=metadata.manifests,
+            entry_point_samples=metadata.entry_point_samples,
+        )
         return self.llm.structured_output(prompt, SynthesizedDocs, system_instruction)
 
 class DocumentGenerator:
@@ -41,13 +35,17 @@ class DocumentGenerator:
 
     def write_docs(self, docs: SynthesizedDocs):
         simp_content = docs.simp_md.strip()
-        agent_content = docs.agent_md.strip()
+        spec_content = docs.spec_md.strip()
         
-        # Ensure we always have content
+        # Ensure SIMP.md always has content; SPEC.md is optional.
         if not simp_content:
             simp_content = "# Project Manifest (SIMP)\n\nAuto-generated structure."
-        if not agent_content:
-            agent_content = "# SimpCode Agent Policy\n\n1. Read before write.\n2. Ensure tests pass."
 
         (self.root / "SIMP.md").write_text(simp_content + "\n")
-        (self.root / "AGENT.md").write_text(agent_content + "\n")
+
+        if spec_content:
+            (self.root / "SPEC.md").write_text(spec_content + "\n")
+        else:
+            spec_path = self.root / "SPEC.md"
+            if spec_path.exists():
+                spec_path.unlink()

@@ -29,11 +29,15 @@ class TakeAction:
         self.console = Console()
 
     def execute(self, plan: Plan, context: str, scanner=None, task: str = None):
-        allowed_files = list(set([step.target for step in plan.steps]))
+        allowed_files = [step.target for step in plan.steps if "/" in step.target or step.target.endswith(".md") or step.target.endswith(".py") or step.target.endswith(".json")]
         harness = ToolHarness(self.root, allowed_files)
         
         current_context = context
         execution_trace = ""
+        recent_tool_calls: List[str] = []
+
+        def _tool_path(args: Dict[str, Any]) -> str:
+            return args.get("path") or args.get("file_path") or args.get("file") or ""
         
         for step in plan.steps:
             if scanner and task:
@@ -54,8 +58,12 @@ class TakeAction:
                 system_instruction = registry.load("staff_implementer")
                 
                 try:
+                    prompt = registry.load("staff_implementer_step", include_base=False).format(
+                        execution_history=execution_trace,
+                        current_context=current_context,
+                    )
                     tool_call = self.llm.structured_output(
-                        f"EXECUTION HISTORY:\n{execution_trace}\n\nCURRENT CONTEXT:\n{current_context}\n\nNext Action:",
+                        prompt,
                         ToolCall,
                         system_instruction
                     )
@@ -71,6 +79,13 @@ class TakeAction:
                     continue
 
                 self.console.print(f"  [cyan][Action]:[/cyan] {tool_call.tool}({tool_call.args})")
+                tool_signature = f"{tool_call.tool}:{_tool_path(tool_call.args)}"
+                recent_tool_calls.append(tool_signature)
+                recent_tool_calls = recent_tool_calls[-3:]
+                if len(recent_tool_calls) == 3 and len(set(recent_tool_calls)) == 1:
+                    self.console.print(f"  [yellow]Repeated tool call detected: {tool_signature}. Aborting step to avoid a reasoning loop.[/yellow]")
+                    execution_trace += f"\nTurn {step_turns} (Step {step.id}): repeated tool call {tool_signature}"
+                    break
 
                 # Execute via Harness
                 try:
@@ -78,9 +93,16 @@ class TakeAction:
                     status = "success"
                     
                     if tool_call.tool == "read_file":
-                        result = harness.read_file(tool_call.args["path"])
+                        result = harness.read_file(_tool_path(tool_call.args))
                     elif tool_call.tool in ["write_file", "patch_file"]:
-                        file_path = tool_call.args["path"]
+                        file_path = _tool_path(tool_call.args)
+                        if file_path not in allowed_files:
+                            result = f"Plan Violation: '{file_path}' is not in the approved step scope. Abort and re-plan with a concrete file target."
+                            status = "failure"
+                            self.logger.log_event(tool_call.tool, tool_call.args, result, status)
+                            execution_trace += f"\nTurn {step_turns} (Step {step.id}): {tool_call.tool} -> {status}\nResult: {result[:1000]}..."
+                            self.console.print(f"  [bold red][!] {result}[/bold red]")
+                            break
                         if tool_call.tool == "write_file":
                             harness.write_file(file_path, tool_call.args["content"])
                         else:
@@ -105,12 +127,19 @@ class TakeAction:
                     self.logger.log_event(tool_call.tool, tool_call.args, result, status)
                     trace_entry = f"\nTurn {step_turns} (Step {step.id}): {tool_call.tool} -> {status}\nResult: {result[:1000]}..."
                     execution_trace += trace_entry
+                    if status == "success" and tool_call.tool == "read_file" and result:
+                        current_context += f"\n\n--- TOOL RESULT: {tool_call.tool} {tool_signature} ---\n{result[:4000]}"
+
+                    if status in {"failure", "error"} and "Plan Violation" in result:
+                        break
                     
                 except Exception as e:
                     error_msg = str(e)
                     print(f"  [!] {error_msg}")
                     self.logger.log_event(tool_call.tool, tool_call.args, error_msg, "exception")
                     execution_trace += f"\nTurn {step_turns} (Step {step.id}): {tool_call.tool} -> EXCEPTION: {error_msg}"
+                    if "Plan Violation" in error_msg or "Security Violation" in error_msg:
+                        break
                     
             if not step_complete:
                 print(f"[red]CRITICAL: Step {step.id} failed after {max_step_turns} attempts. Aborting plan.[/red]")

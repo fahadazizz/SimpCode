@@ -39,17 +39,30 @@ class PlanGenerator:
     def generate(self, task: str, initial_context: str) -> Plan:
         system_instruction = registry.load("staff_architect")
         current_context = initial_context
+
+        # Prepend SPEC.md when present so explicit target-state requirements can shape the plan.
+        try:
+            spec_path = self.scanner.root / "SPEC.md"
+            if spec_path.exists():
+                spec_text = spec_path.read_text()
+                # Keep SPEC inclusion token-efficient: include a short trimmed form
+                spec_snippet = spec_text if len(spec_text) <= 2000 else spec_text[:2000] + "\n... (truncated SPEC.md)"
+                current_context = f"--- SPEC.md (User Requirements) ---\n{spec_snippet}\n\n{current_context}"
+        except Exception:
+            # If reading SPEC.md fails, continue with existing context
+            pass
         
         max_turns = 3
         for turn in range(max_turns):
-            prompt = f"""CONTEXT:
-{current_context}
-
-USER TASK:
-{task}
-
-You can either generate a production-grade Plan artifact (set is_plan=True and populate plan) OR request more context if you lack information (set is_plan=False and populate request). Ensure steps are atomic and verification is concrete.
-"""
+            prompt = registry.load("staff_architect_plan", include_base=False).format(
+                current_context=current_context,
+                task=task,
+                mode_instruction=(
+                    "You can either generate a production-grade Plan artifact (set is_plan=True and populate plan) "
+                    "OR request more context if you lack information (set is_plan=False and populate request). "
+                    "Ensure steps are atomic and verification is concrete."
+                ),
+            )
             response = self.llm.structured_output(prompt, ArchitectResponse, system_instruction)
             
             if response.is_plan and response.plan:
@@ -67,7 +80,11 @@ You can either generate a production-grade Plan artifact (set is_plan=True and p
                 break
                 
         # Force plan on last turn if loop is exhausted
-        prompt = f"""CONTEXT:\n{current_context}\n\nUSER TASK:\n{task}\n\nYou MUST generate a final production-grade Plan artifact now (set is_plan=True and populate plan)."""
+        prompt = registry.load("staff_architect_plan", include_base=False).format(
+            current_context=current_context,
+            task=task,
+            mode_instruction="You MUST generate a final production-grade Plan artifact now (set is_plan=True and populate plan).",
+        )
         response = self.llm.structured_output(prompt, ArchitectResponse, system_instruction)
         if response.plan:
             return response.plan

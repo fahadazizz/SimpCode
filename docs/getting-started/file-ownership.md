@@ -8,16 +8,20 @@ After running `simp init`, SimpCode creates several files and directories to mai
 
 These files are designed to be modified by you to guide SimpCode's behavior.
 
-### `AGENT.md`
+### `SPEC.md`
 - **Owner**: User
-- **Purpose**: This is your "Rules of Engagement." 
-- **Wait, can SimpCode edit this?**: SimpCode will never modify this file unless you explicitly run a command like `simp do "Update AGENT.md with rule X"`. 
-- **Safe to Edit?**: **YES.** You should keep this file updated with your project's coding standards, naming conventions, and architectural preferences.
+- **Purpose**: The authoritative project specification and target-state requirements.
+- **Safe to Edit?**: **YES.** Keep this current when the product direction, architecture, or constraints change.
 
 ### `SIMP.md`
 - **Owner**: Shared (Primarily User)
-- **Purpose**: The high-level Project Manifest.
-- **Safe to Edit?**: **YES.** While SimpCode generates this during `init`, you can manually refine the "Project Goal" or "Tech Stack" sections to provide better context for the AI.
+- **Purpose**: The high-level project manifest and project overview.
+- **Safe to Edit?**: **YES.** Use it to summarize the repository structure, major modules, and important notes for SimpCode.
+
+### `src/simpcode/core/prompts/`
+- **Owner**: SimpCode
+- **Purpose**: Internal reasoning prompts used by the framework itself.
+- **Safe to Edit?**: **Only if you are modifying SimpCode itself.** These are not project-onboarding files.
 
 ---
 
@@ -27,9 +31,9 @@ These files are the "internal brain" of the system. Manual edits can cause synch
 
 ### `.simp/wiki/` (Directory)
 - **Owner**: SimpCode
-- **Purpose**: Contains the Semantic Wiki nodes (knowledge base).
-- **Safe to Edit?**: **NO.** These files are managed by the engine. If you manually edit a wiki node, the cryptographic hashes will mismatch, and SimpCode will consider its knowledge "corrupted."
-- **How to update**: If the information here is wrong, run `simp sync` or perform the manual code changes and SimpCode will update the wiki automatically.
+- **Purpose**: Contains the semantic Wiki nodes (knowledge base).
+- **Safe to Edit?**: **NO.** These files are managed by the engine. If you manually edit a wiki node, the hashes will mismatch and SimpCode will consider the knowledge stale or corrupted.
+- **How to update**: If the information here is wrong, run `simp sync` or make the corresponding code changes and let SimpCode refresh the Wiki.
 
 ### `.simp/index.json`
 - **Owner**: SimpCode
@@ -42,8 +46,9 @@ These files are the "internal brain" of the system. Manual edits can cause synch
 
 | File/Path | Managed By | User Safe? | Action on Conflict |
 | :--- | :--- | :--- | :--- |
-| `AGENT.md` | User | Yes | Edit freely to change AI behavior. |
-| `SIMP.md` | User/AI | Yes | Edit to clarify project purpose. |
+| `SPEC.md` | User | Yes | Edit to change the target-state requirements. |
+| `SIMP.md` | User/AI | Yes | Edit to clarify the project overview. |
+| `src/simpcode/core/prompts/` | SimpCode | No for project users | Internal framework prompts, not onboarding files. |
 | `.simp/wiki/` | SimpCode | No | Run `simp sync` to fix. |
 | `.simp/index.json`| SimpCode | No | Run `simp init` to fix. |
 
@@ -51,4 +56,4 @@ These files are the "internal brain" of the system. Manual edits can cause synch
 
 ## Best Practice: The "Rule of Thumb"
 If a file is inside the `.simp/` hidden directory, **do not touch it.** 
-If it is a `.md` file in your repository root (`SIMP.md`, `AGENT.md`), it is **yours to control.**
+If it is a `.md` file in your repository root (`SIMP.md`, `SPEC.md`), it is **yours to control**. If it lives under `.simp/`, it is managed by SimpCode.

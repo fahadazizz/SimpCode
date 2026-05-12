@@ -22,6 +22,7 @@ from simpcode.core.state import SessionManager, SessionState, SessionMessage
 from simpcode.harness.permissions import PermissionSystem
 from simpcode.wiki.engine import WikiEngine
 from simpcode.core.prompts import registry
+from simpcode.core.onboarding import needs_onboarding, ensure_onboarding_artifacts
 
 class SimpShell:
     """
@@ -83,6 +84,8 @@ class SimpShell:
         
         if self.state.history:
             self.console.print(f"[yellow]Resuming session with {len(self.state.history)} messages.[/yellow]")
+
+        # SPEC.md is optional; if present, it will be used by planning and reflection.
 
     def run(self):
         self.welcome()
@@ -250,10 +253,15 @@ class SimpShell:
         bootstrap = WikiBootstrap(self.llm, self.root)
         
         with self.console.status("[bold blue]Initializing Project..."):
-            metadata = analyzer.collect_metadata()
-            docs = synthesizer.synthesize(metadata)
-            generator.write_docs(docs)
-            bootstrap.run(metadata)
+            if needs_onboarding(self.root):
+                metadata = analyzer.collect_metadata()
+                docs = synthesizer.synthesize(metadata)
+                generator.write_docs(docs)
+                try:
+                    bootstrap.run(metadata)
+                except Exception as bootstrap_error:
+                    self.console.print(f"[yellow]Wiki bootstrap degraded:[/yellow] {bootstrap_error}")
+                ensure_onboarding_artifacts(self.root, docs, metadata)
         self.console.print("[bold green]✓ Project Onboarded.[/bold green]")
 
     def handle_chat(self, user_input: str):

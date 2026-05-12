@@ -8,7 +8,7 @@ Explore the engineering philosophy and technical components that make SimpCode a
 
 The most significant problem with standard AI assistants is **Context Fragmentation**. As a project scales, the AI cannot "see" the whole codebase, leading to hallucinations about nonexistent functions or conflicting architectural patterns.
 
-SimpCode solves this with the **Semantic Wiki**.
+SimpCode solves this with the **Semantic Wiki**, plus a clear separation between `SPEC.md` (requirements), `SIMP.md` (project overview), and the internal prompt layer.
 
 ### What is it?
 The Semantic Wiki is a repository-local long-term memory stored in `.simp/wiki/`. It treats your codebase as a structured database of knowledge rather than a raw collection of text files.
@@ -37,7 +37,7 @@ A task never proceeds without human sign-off. This "Human-in-the-Loop" stage ens
 ### Phase 3: Execution (The Harness)
 SimpCode interacts with your system through a **Hardened Execution Harness**.
 - **Tool Isolation**: The AI cannot run arbitrary commands; it uses a specific set of verified Python methods.
-- **Policy Enforcement**: Every action is checked against your `AGENT.md` rules before it is committed.
+- **Policy Enforcement**: Every action is checked against the repository context, the generated plan, and the project requirements in `SPEC.md` before it is committed.
 - **Safety**: Shell commands are escaped and validated to prevent RCE (Remote Code Execution) vulnerabilities.
 
 ### Phase 4: Reflection & Sync

@@ -21,9 +21,9 @@ class ScanScene:
         self.skill_selector = SkillSelector(llm)
 
     def run(self, task: str) -> str:
-        # 1. Load Ground-Truth Context (Mandatory)
+        # 1. Load Ground-Truth Context (SIMP.md is always required; SPEC.md is optional)
         mandatory = []
-        for name in ["SIMP.md", "AGENT.md"]:
+        for name in ["SIMP.md", "SPEC.md"]:
             p = self.root / name
             if p.exists():
                 mandatory.append(ContextItem(id=name, content=p.read_text(), priority=0))

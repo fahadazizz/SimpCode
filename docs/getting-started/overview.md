@@ -48,7 +48,7 @@ Your configuration is stored locally at `~/.simpcode/config.json`. This file is 
 
 ## Step 2: Project Onboarding (`init`)
 
-SimpCode doesn't start guessing. It requires a formal **Onboarding** phase for every repository you work in. This builds the initial "Semantic Wiki" that allows the AI to understand your project structure.
+SimpCode doesn't start guessing. It requires a formal onboarding phase for every repository you work in. That phase builds the initial semantic model that lets the AI understand the project structure and start reasoning from real source files.
 
 Navigate to your target project folder and run:
 
@@ -58,9 +58,11 @@ simp init
 
 ### What happens during initialization?
 - **Structural Audit**: SimpCode scans your directory tree to understand module relationships.
-- **Intelligence Layer (`SIMP.md`)**: A master document is generated that describes your project's high-level purpose and core tech stack.
-- **Instruction Set (`AGENT.md`)**: SimpCode creates a template for project-specific rules. You should edit this to include your preferred coding styles or forbidden patterns.
-- **Knowledge Bootstrap**: The first nodes of your Semantic Wiki are created in `.simp/wiki/`.
+- **Specification Layer (`SPEC.md`)**: The target-state requirements for the project are created or refreshed.
+- **Project Manifest (`SIMP.md`)**: A high-level overview of the project is generated.
+- **Knowledge Bootstrap**: The first nodes of the semantic Wiki are created in `.simp/wiki/`.
+
+For a full explanation of the architecture and the user workflow, read the [SimpCode User Guide](../guide.md).
 
 ---
 
@@ -92,5 +94,5 @@ simp do "Add a new utility function to calculate file hashes in src/utils.py"
 
 - **[File Ownership](file-ownership.md)**: Understand which files you should edit and which belong to SimpCode.
 - **Master the Shell**: Use `simp chat` for a persistent pair-programming session.
-- **Set the Rules**: Learn how to write world-class rules in [Configuring AGENT.md](../how-to/index.md#customizing-agent-behavior).
+- **Write a Strong SPEC**: Learn how to define project requirements in the [SimpCode User Guide](../guide.md).
 - **Deep Dive**: Understand the [Semantic Wiki architecture](../concepts/index.md#the-semantic-wiki) to maximize accuracy.

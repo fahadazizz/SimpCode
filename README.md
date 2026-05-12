@@ -41,8 +41,8 @@ Standard assistants "grep and guess." SimpCode maintains a repository-local long
 ### 2. Explicit Implementation Plans
 We follow a **"Think-Before-Type"** philosophy. SimpCode never modifies your code without first presenting a detailed Markdown plan. You review the strategy, approve the targets, and watch the execution.
 
-### 3. Policy-Driven Engineering (AGENT.md)
-Your project has unwritten rules. Put them in `AGENT.md`. SimpCode reads these rules at the start of **every** turn, ensuring it follows your style guide, naming conventions, and testing requirements to the letter.
+### 3. Specification-Driven Engineering (SPEC.md)
+Your project goals and constraints belong in `SPEC.md`. SimpCode reads that specification as authoritative project intent and uses it, together with `SIMP.md` and the semantic Wiki, to keep implementation aligned with the real target state.
 
 ---
 
@@ -60,13 +60,15 @@ Your project has unwritten rules. Put them in `AGENT.md`. SimpCode reads these r
 
 ## Documentation
 
-For deep-dives into our architecture and advanced workflows, visit our [Documentation Portal](docs/index.md):
+Start with the canonical [SimpCode User Guide](docs/guide.md), then use the documentation portal for focused references.
 
-- **[Installation Guide](docs/getting-started/installation-deep-dive.md)**
-- **[Concepts & Architecture](docs/concepts/index.md)**
-- **[The ReAct Loop](docs/concepts/index.md#the-engineering-lifecycle-the-react-loop)**
-- **[Writing High-Quality Rules](docs/how-to/writing-rules.md)**
-- **[CLI Reference](docs/reference/index.md)**
+- **[SimpCode User Guide](docs/guide.md)**
+- **[Documentation Portal](docs/index.md)**
+- **[Getting Started](docs/getting-started/overview.md)**
+- **[Architecture Overview](docs/concepts/index.md)**
+- **[Reference](docs/reference/index.md)**
+
+If you are onboarding a project, read the guide first: it explains `SPEC.md`, `SIMP.md`, the Wiki, skills, planning, execution, and productivity patterns in one place.
 
 ---
 
@@ -80,7 +82,7 @@ For deep-dives into our architecture and advanced workflows, visit our [Document
 
 ## Contributing
 
-We build for engineers, by engineers. Check out our [Architecture Overview](docs/architecture/index.md) to see how you can extend the core, build new wiki engines, or add support for more LLM providers.
+We build for engineers, by engineers. Check out our [Architecture Overview](docs/concepts/index.md) and the [SimpCode User Guide](docs/guide.md) to see how the core, Wiki, harness, and prompt layer fit together.
 
 ---
 <p align="center">
