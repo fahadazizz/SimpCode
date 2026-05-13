@@ -1,88 +1,89 @@
-# SimpCode — High-Integrity Agentic Engineering Assistant
+# SimpCode
 
-<p align="center">
-  <img src="logo.png" width="200" alt="SimpCode Logo">
-</p>
+SimpCode is a **TUI-first engineering assistant** for real repositories. It is designed to help you understand a codebase, plan work safely, execute changes with verification, and keep a local project memory in sync as the repository evolves.
 
-SimpCode is not just another coding assistant. It is a **task-oriented orchestrator** designed to automate complex engineering missions while maintaining absolute architectural truth.
+The current product model is intentionally simple:
 
-Unlike chat-indexed tools that get lost in large codebases, SimpCode builds a persistent **Semantic Wiki** of your project. It treats your codebase as a structured knowledge graph, ensuring that every line of code it writes is grounded in your project's unique patterns and constraints.
+- Use `simp setup` once to configure your provider.
+- Use `simp init` to onboard a project and enter the interactive session.
+- Do the actual engineering work inside the TUI with slash commands such as `/ask`, `/do`, `/sync`, `/status`, `/wiki`, and `/sessions`.
 
----
+SimpCode is built around the current state of your repository, not a remote shared workspace. It keeps project artifacts local, uses a project manifest and optional specification file for alignment, and stores session history and wiki state inside `.simp/`.
 
-## The Quick Start
+## What SimpCode Gives You
 
-Install SimpCode globally and prepare for your first mission:
+- A local project memory that stays close to the code you are editing.
+- A planning-first workflow that asks for structure before writing code.
+- A terminal interface that is meant for real work, not just chat.
+- Session persistence so you can return to a project later and continue from context.
+- A safe execution model that keeps changes scoped and reviewable.
+
+## Fast Start
 
 ```bash
-# 1. Install system-wide
-curl -sSL https://raw.githubusercontent.com/fahadazizz/simpcode/main/install.sh | bash
+cd /path/to/your/repository
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
 
-# 2. Configure your LLM (Anthropic, OpenAI, Groq, Google, etc.)
 simp setup
-
-# 3. Onboard your project
-cd /path/to/your/repo
 simp init
-
-# 4. Start a task
-simp do "Implement a robust retry logic for the API client"
 ```
 
----
+After `simp init`, SimpCode opens the interactive shell. Inside the TUI, start with:
 
-## Why SimpCode?
+```text
+/help
+/ask what does this repository currently do?
+/do add input validation to the API layer
+```
 
-The modern bottleneck isn't typing—it's **context management**. SimpCode solves this through three core pillars:
+## Where to Read First
 
-### 1. The Semantic Wiki (.simp/wiki)
-Standard assistants "grep and guess." SimpCode maintains a repository-local long-term memory. It distillates source code into cognitive nodes, allowing for **zero-hallucination navigation** of complex logic.
+- [User Guide](docs/guide.md): the full end-to-end walkthrough.
+- [Documentation Portal](docs/index.md): navigation by task.
+- [Getting Started](docs/getting-started/overview.md): install, configure, and launch.
+- [Concepts](docs/concepts/index.md): the current mental model.
+- [Reference](docs/reference/index.md): commands, files, and settings.
+- [Troubleshooting](docs/TROUBLESHOOTING.md): common issues and recovery steps.
 
-### 2. Explicit Implementation Plans
-We follow a **"Think-Before-Type"** philosophy. SimpCode never modifies your code without first presenting a detailed Markdown plan. You review the strategy, approve the targets, and watch the execution.
+## Command Model
 
-### 3. Policy-Driven Engineering (AGENT.md)
-Your project has unwritten rules. Put them in `AGENT.md`. SimpCode reads these rules at the start of **every** turn, ensuring it follows your style guide, naming conventions, and testing requirements to the letter.
+The CLI is intentionally small. The work commands live in the TUI.
 
----
+| Command | Purpose |
+|---|---|
+| `simp setup` | Configure the global provider and model. |
+| `simp init` | Onboard a repository and enter the TUI. |
+| `simp chat` | Open the interactive session. |
+| `simp help` | Show the CLI help and entry points. |
 
-## Main Interface
+Inside the TUI, use slash commands for work:
 
-| Command | Goal | Description |
-| :--- | :--- | :--- |
-| `simp ask` | **Research** | Perform deep forensic queries using the Semantic Wiki. |
-| `simp do` | **Action** | Full Engineering Lifecycle: Research -> Plan -> Approve -> Execute -> Sync. |
-| `simp chat` | **Pairing** | High-fidelity interactive TUI for real-time collaboration. |
-| `simp sync` | **Audit** | Re-sync the Wiki after manual changes or large merges. |
-| `simp setup` | **Config** | Global credential management (~/.simpcode/config.json). |
+| Slash command | Purpose |
+|---|---|
+| `/ask` | Research and explanation. |
+| `/do` | Plan and execute a task. |
+| `/sync` | Refresh the wiki after manual changes. |
+| `/status` | Show current project health. |
+| `/wiki` | Browse the knowledge base. |
+| `/sessions` | Inspect saved sessions. |
+| `/config` | View or change the active provider for the session. |
 
----
+## Current Architecture in One Paragraph
 
-## Documentation
+`simp init` and `simp chat` open the TUI, which uses shared workflow functions for research, planning, execution, sync, status, recovery, wiki browsing, and session handling. The workflow layer reads project context, consults the wiki, assembles target source snippets, and coordinates the plan-and-execute loop. Session state is stored under `.simp/sessions/`, plan artifacts under `.simp/plans/`, and wiki content under `.simp/wiki/`.
 
-For deep-dives into our architecture and advanced workflows, visit our [Documentation Portal](docs/index.md):
+## Repository Artifacts
 
-- **[Installation Guide](docs/getting-started/installation-deep-dive.md)**
-- **[Concepts & Architecture](docs/concepts/index.md)**
-- **[The ReAct Loop](docs/concepts/index.md#the-engineering-lifecycle-the-react-loop)**
-- **[Writing High-Quality Rules](docs/how-to/writing-rules.md)**
-- **[CLI Reference](docs/reference/index.md)**
+These are the main files SimpCode cares about in a project repository:
 
----
+- `SIMP.md`: the project manifest and current working overview.
+- `SPEC.md`: the optional target-state specification.
+- `.simp/wiki/`: the local knowledge base.
+- `.simp/sessions/`: saved interactive sessions.
+- `.simp/plans/`: persisted plans from task runs.
 
-## Security & Privacy
+## Keep Reading
 
-- **Local Analysis**: Your code is indexed and analyzed locally. Only relevant snippets and wiki nodes are sent to your provider for reasoning.
-- **Hardened Harness**: SimpCode uses a secure execution layer with shell-escaping and permission gates to prevent unauthorized operations.
-- **Privacy-First**: No data is sent to SimpCode's servers; we talk directly to your chosen AI provider's API.
-
----
-
-## Contributing
-
-We build for engineers, by engineers. Check out our [Architecture Overview](docs/architecture/index.md) to see how you can extend the core, build new wiki engines, or add support for more LLM providers.
-
----
-<p align="center">
-  <i>"SimpCode isn't just an assistant; it's a junior engineer who never sleeps and remembers every function you've ever written."</i>
-</p>
+If you want the most complete walkthrough, open the [User Guide](docs/guide.md). If you want the task-by-task flows, go to [How To](docs/how-to/index.md). If you want the command syntax, open [Reference](docs/reference/index.md).

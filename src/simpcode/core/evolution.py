@@ -3,8 +3,8 @@ from typing import List, Dict, Optional
 from pydantic import BaseModel
 import time
 from simpcode.wiki.models import WikiPage, WikiPageMetadata
+from simpcode.wiki.engine import WikiEngine
 from simpcode.core.llm import LLMClient
-from simpcode.core.paths import get_wiki_dir
 from simpcode.core.prompts import registry
 
 class EvolutionProposals(BaseModel):
@@ -21,35 +21,26 @@ class GetBetter:
     def __init__(self, root: Path, llm: LLMClient):
         self.root = root
         self.llm = llm
-        self.wiki_dir = get_wiki_dir()
+        self.wiki = WikiEngine(root)
 
-    def run(self, task: str, execution_trace: str):
+    def run(self, task: str, execution_trace: str, files_modified: List[str] = None, rationale: str = None):
         system_instruction = registry.load("staff_researcher")
-        prompt = f"""TASK INTENT: {task}
+        prompt = registry.load("staff_researcher_learning", include_base=False).format(
+            task=task,
+            execution_trace=execution_trace,
+        )
 
-EXECUTION TRACE:
-{execution_trace}
-
-Extract high-integrity knowledge proposals.
-"""
         proposals = self.llm.structured_output(prompt, EvolutionProposals, system_instruction)
         
-        # 1. Update changes.md (Structural update is automatic)
-        self._append_to_changes(proposals.change_log_entry)
+        # 1. Update changes.md through the high-integrity WikiEngine
+        self.wiki.append_change_log(
+            task_description=task,
+            files_modified=files_modified or [],
+            rationale=rationale or proposals.change_log_entry
+        )
         
         # 2. Surface cognitive proposals for human validation
         return proposals
-
-    def _append_to_changes(self, entry: str):
-        path = self.wiki_dir / "changes.md"
-        header = f"\n### [{time.strftime('%Y-%m-%d %H:%M:%S')}] Evolution\n"
-        
-        if not path.exists():
-            meta = WikiPageMetadata(id="changes", type="structural", last_updated=time.time())
-            WikiPage(metadata=meta, content="# Change Log\n\nSemantic history of system evolution.").to_file(path)
-            
-        with open(path, "a") as f:
-            f.write(header + entry + "\n")
 
     def append_proposals(self, proposals: EvolutionProposals):
         """Append accepted proposals to respective cognitive wiki layers."""
@@ -61,12 +52,33 @@ Extract high-integrity knowledge proposals.
         if not items:
             return
             
-        path = self.wiki_dir / filename
-        if not path.exists():
-            meta = WikiPageMetadata(id=filename.split(".")[0], type="cognitive", last_updated=time.time())
-            WikiPage(metadata=meta, content=f"# {title}\n\nProject {title.lower()}.\n").to_file(path)
+        page = self.wiki.get_page(filename.replace(".md", ""))
+        if not page:
+            meta = WikiPageMetadata(id=filename.replace(".md", ""), type="cognitive", last_updated=time.time())
+            current_content = f"# {title}\n\nProject {title.lower()}.\n"
+            page = WikiPage(metadata=meta, content=current_content)
+        else:
+            current_content = page.content
             
-        with open(path, "a") as f:
-            f.write(f"\n### Added {time.strftime('%Y-%m-%d')} \n")
-            for item in items:
-                f.write(f"- {item}\n")
+        # Use LLM to smartly merge and dedup
+        from pydantic import BaseModel
+        class MergedContent(BaseModel):
+            content: str
+
+        prompt = registry.load("wiki_cognitive_merge", include_base=False).format(
+            title=title,
+            current_content=current_content,
+            items=items,
+        )
+        
+        try:
+            result = self.llm.structured_output(prompt, MergedContent, "You are a technical document writer preserving project wisdom.")
+            new_content = result.content
+        except Exception:
+            # Fallback if LLM fails
+            new_content = current_content + "\n### Added new items\n" + "\n".join(f"- {i}" for i in items)
+            
+        page.content = new_content
+        page.metadata.last_updated = time.time()
+        self.wiki.save_page(page)
+

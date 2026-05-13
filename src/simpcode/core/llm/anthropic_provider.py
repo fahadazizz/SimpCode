@@ -42,7 +42,12 @@ class AnthropicProvider(LLMProvider):
             elif "```" in cleaned:
                 cleaned = cleaned.split("```")[1].split("```")[0].strip()
             
-            data = json.loads(cleaned)
+            decoder = json.JSONDecoder()
+            json_start = cleaned.find("{")
+            if json_start >= 0:
+                data, _ = decoder.raw_decode(cleaned[json_start:])
+            else:
+                data = json.loads(cleaned)
             return schema(**data) if schema else data
         except Exception as e:
             raise ValueError(f"[Anthropic] Structured Output Failure: {e}\nRaw: {response_text}")

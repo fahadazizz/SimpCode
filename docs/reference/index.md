@@ -26,9 +26,12 @@ Initializes or updates your global user configuration.
 
 #### `simp init`
 Transforms a standard directory into a SimpCode-aware workspace.
-- Creates `SIMP.md` (Project Manifest).
-- Creates `AGENT.md` (Behavioral Policy).
-- Bootstraps `.simp/wiki/` (Knowledge Base).
+- Creates or refreshes `SPEC.md` (project requirements).
+- Creates or refreshes `SIMP.md` (project manifest / overview).
+- Bootstraps `.simp/wiki/` (knowledge base).
+- **Auto-Enter TUI**: Automatically launches the interactive Rich TUI after onboarding is complete.
+- **Flags**:
+  - `--chat`: (Deprecated/Default) Automatically launches the interactive shell.
 
 #### `simp ask [QUERY]`
 Performs semantic search and architectural research.
@@ -39,12 +42,27 @@ Performs semantic search and architectural research.
 Begins a full engineering lifecycle mission.
 - **Input**: Goal description.
 - **Logic**: Research -> Plan -> Approval -> Execution -> Sync.
+- **Flags**:
+  - `--yes`: Skip the approval step (use with caution).
+  - `--dry-run`: Show the implementation plan but do not execute changes.
 
 #### `simp chat`
 Launches the interactive Rich TUI.
-- Supports multiline input.
-- Renders code snippets with syntax highlighting.
-- Shortcuts: `/exit`, `/clear`.
+- **Persistent Sessions**: Saves and reloads chat history, provider settings, and project context automatically.
+- **Recall Flow**: Defaults to the most recent active session for seamless "resume-where-you-left" engineering.
+- **Options**:
+  - `--session <id>`: Load a specific session. Defaults to the most recent.
+
+#### Slash Commands (Inside Chat)
+| Command | Action |
+| :--- | :--- |
+| `/ask <query>` | Research-only mode using Wiki context. |
+| `/do <task> [--yes] [--dry-run]` | Full implementation lifecycle (Plan -> Execute) with support for flags. |
+| `/sync` | Force a Wiki synchronization. |
+| `/init` | Re-initialize the project from within the shell. |
+| `/sessions` | List recent local engineering sessions. |
+| `/clear` | Flush current session history. |
+| `/exit` | Save state and quit SimpCode. |
 
 #### `simp sync`
 Manually triggers a re-index of the repository.
@@ -89,12 +107,17 @@ Located at `~/.simpcode/config.json`. **Do not check this into version control.*
 
 ## Repository Manifests
 
-### `SIMP.md`
-The "Source of Truth" for the project's identity.
-- contains: Tech stack, core logic, and high-level structure.
-- Created by `init`.
+### `SPEC.md`
+The "Source of Truth" for the project's target state.
+- contains: Goals, constraints, architecture intent, and acceptance criteria.
+- Created or refined by `init`.
 
-### `AGENT.md`
-The "Rules of Engagement."
-- contains: Patterns, formatting rules, and constraints.
-- Always injected into the LLM system prompt for every turn.
+### `SIMP.md`
+The "Project Manifest."
+- contains: Tech stack, core logic, and high-level structure.
+- Created or refined by `init`.
+
+### Internal prompt files
+The prompt registry in `src/simpcode/core/prompts/` contains SimpCode's system prompts.
+- These are implementation details of SimpCode itself.
+- Project users normally do not edit them.

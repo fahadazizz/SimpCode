@@ -22,17 +22,17 @@ class ProjectAnalyzer:
         self.exclusion_filter = ExclusionFilter(root)
 
     def collect_metadata(self) -> ProjectMetadata:
-        file_tree = []
+        raw_file_tree = []
         manifests = {}
         entry_point_samples = {}
         
-        # 1. Map File Tree (shallow for large projects)
+        # 1. Map File Tree
         for p in self.root.rglob("*"):
             rel_path = str(p.relative_to(self.root))
             if self.exclusion_filter.is_excluded(rel_path):
                 continue
             if p.is_file():
-                file_tree.append(rel_path)
+                raw_file_tree.append(rel_path)
                 
                 # 2. Extract Manifests
                 manifest_names = {"pyproject.toml", "package.json", "requirements.txt", "Makefile", "go.mod", "Cargo.toml", "pom.xml", "build.gradle", "Gemfile"}
@@ -54,10 +54,30 @@ class ProjectAnalyzer:
                     except Exception:
                         pass
 
+        # Hierarchical compression if too large
+        if len(raw_file_tree) <= 500:
+            file_tree = raw_file_tree
+        else:
+            file_tree = []
+            dir_counts = {}
+            for f in raw_file_tree:
+                parts = f.split("/")
+                if len(parts) > 3:
+                    dir_path = "/".join(parts[:3]) + "/*"
+                    dir_counts[dir_path] = dir_counts.get(dir_path, 0) + 1
+                else:
+                    file_tree.append(f)
+            
+            for d, count in dir_counts.items():
+                file_tree.append(f"{d} ({count} files)")
+                
+            # If still too large, fallback to truncation
+            file_tree = file_tree[:2000]
+
         return ProjectMetadata(
             name=self.root.name,
             root=str(self.root),
-            file_tree=file_tree[:500], # Limit tree size for LLM
+            file_tree=file_tree,
             manifests=manifests,
             entry_point_samples=entry_point_samples
         )

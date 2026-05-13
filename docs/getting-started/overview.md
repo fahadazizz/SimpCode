@@ -1,96 +1,86 @@
-# Getting Started with SimpCode
+# Getting Started Overview
 
-This guide will take you from installation to your first successful automated task. Whether you're a solo developer or part of a large engineering team, SimpCode is designed to integrate seamlessly into your existing workflow.
+This page gives you the shortest path from “I have a repository” to “I am using SimpCode on it correctly.”
 
----
+## The Short Version
 
-## Prerequisites
+1. install SimpCode into a Python environment
+2. run `simp setup` once to configure your provider
+3. run `simp init` inside the repository you want to work on
+4. use the interactive TUI for all research and implementation work
 
-Before you begin, ensure your system meets the following requirements:
+That is the default operating model.
 
-- **OS**: macOS, Linux, or Windows (via WSL2).
-- **Python**: Version 3.10 or higher.
-- **Git**: Installed and configured in your shell.
-- **LLM API Key**: Access to at least one supported provider (Anthropic, OpenAI, Groq, Google, etc.).
+## What You Need
 
----
+- Python 3.10 or newer
+- Git
+- a supported LLM provider and API key, unless you are using a local model endpoint
+- a repository you actually want to work on
 
-## ⚡ Quick Start: The One-Liner
+## The First Two Commands
 
-For most users, our automated installation script is the fastest way to get SimpCode running globally. This script clones the repository to a protected local directory, sets up a virtual environment, and symlinks the `simp` command to your path.
+### `simp setup`
 
-```bash
-curl -sSL https://raw.githubusercontent.com/fahadazizz/simpcode/main/install.sh | bash
+Use this when you need to define the provider and model for your local SimpCode installation.
+
+This is global configuration. You typically do it once and then reuse it across repositories.
+
+### `simp init`
+
+Use this inside a project repository.
+
+It prepares the project artifacts and then opens the TUI so you can begin working immediately.
+
+If the repository has not been onboarded before, `simp init` creates the local project memory and the initial wiki. If the project already exists in SimpCode, it refreshes the onboarding state and then lets you continue.
+
+## What the TUI Is For
+
+The TUI is where you do the actual work:
+
+- ask questions about the repository
+- request implementation plans
+- approve bounded changes
+- inspect wiki pages
+- review session state
+- sync the local project memory after manual edits
+
+The TUI is also where SimpCode keeps session continuity. When you return to a repository later, you can pick up from a saved session rather than starting from nothing.
+
+## The Main User Flow
+
+After initialization, a typical flow looks like this:
+
+1. ask a question to understand the repository
+2. use `/do` for a concrete change
+3. review the generated plan before approving it
+4. sync the wiki after manual repository changes
+5. inspect sessions if you need to continue later
+
+## Recommended First Task
+
+If you want to see whether SimpCode understands a repository, begin with a research question:
+
+```text
+/ask what is the main entry point and how is the project organized?
 ```
 
-*Note: After running this, restart your terminal or source your profile to ensure `~/.local/bin` is in your PATH.*
+That gives you a low-risk check of the repository knowledge before you ask it to edit anything.
 
----
+## Recommended First Change
 
-## Step 1: Global Configuration
+Once research looks correct, request a small bounded edit:
 
-SimpCode needs to know which AI "brain" to use and how to authenticate. Run the setup wizard:
-
-```bash
-simp setup
+```text
+/do add input validation to the user creation path
 ```
 
-The wizard will guide you through:
-1.  **Selecting a Provider**: Choose your preferred LLM engine.
-2.  **Model Identification**: Enter the specific model ID (e.g., `claude-3-5-sonnet-latest`).
-3.  **Authentication**: Securely input your API Key.
-4.  **Verification**: SimpCode will perform a handshake to ensure the connection is live.
+Start small. SimpCode is strongest when the task is clear, scoped, and easy to verify.
 
-**Where is this kept?**
-Your configuration is stored locally at `~/.simpcode/config.json`. This file is never shared or uploaded; it remains on your machine as a secure global credential.
+## What to Read Next
 
----
-
-## Step 2: Project Onboarding (`init`)
-
-SimpCode doesn't start guessing. It requires a formal **Onboarding** phase for every repository you work in. This builds the initial "Semantic Wiki" that allows the AI to understand your project structure.
-
-Navigate to your target project folder and run:
-
-```bash
-simp init
-```
-
-### What happens during initialization?
-- **Structural Audit**: SimpCode scans your directory tree to understand module relationships.
-- **Intelligence Layer (`SIMP.md`)**: A master document is generated that describes your project's high-level purpose and core tech stack.
-- **Instruction Set (`AGENT.md`)**: SimpCode creates a template for project-specific rules. You should edit this to include your preferred coding styles or forbidden patterns.
-- **Knowledge Bootstrap**: The first nodes of your Semantic Wiki are created in `.simp/wiki/`.
-
----
-
-## Step 3: Your First Mission
-
-Now that SimpCode is "aware" of your code, you can give it a task. Let's try a research task first to test its knowledge.
-
-```bash
-simp ask "Explain how the main entry point of this project is structured."
-```
-
-SimpCode will navigate its Wiki, locate the relevant files, and provide a deep architectural explanation based on **actual code**, not just generic AI guesses.
-
-### Moving to Action
-Once you trust the research, try a modification:
-
-```bash
-simp do "Add a new utility function to calculate file hashes in src/utils.py"
-```
-
-1.  **Plan**: SimpCode will present an **Implementation Plan**.
-2.  **Review**: Read the plan. It will tell you exactly which lines it intends to change.
-3.  **Approve**: Type `y` or `yes`.
-4.  **Verify**: Watch as SimpCode writes the code and checks for syntax errors.
-
----
-
-## Next Steps
-
-- **[File Ownership](file-ownership.md)**: Understand which files you should edit and which belong to SimpCode.
-- **Master the Shell**: Use `simp chat` for a persistent pair-programming session.
-- **Set the Rules**: Learn how to write world-class rules in [Configuring AGENT.md](../how-to/index.md#customizing-agent-behavior).
-- **Deep Dive**: Understand the [Semantic Wiki architecture](../concepts/index.md#the-semantic-wiki) to maximize accuracy.
+- [Installation Deep Dive](installation-deep-dive.md)
+- [Setup and Usage](setup-and-usage.md)
+- [File Ownership](file-ownership.md)
+- [User Guide](../guide.md)
+- [Command Reference](../reference/index.md)

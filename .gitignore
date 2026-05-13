@@ -4,6 +4,7 @@
 
 __pycache__
 simpcode.egg-info/
+build/
 
 *.pyc
 .env

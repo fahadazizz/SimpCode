@@ -18,11 +18,8 @@ class WikiNavigator:
 
     def navigate(self, task: str, index_content: str) -> NavigationDecision:
         system_instruction = registry.load("wiki_navigator")
-        prompt = f"""USER TASK: {task}
-
-PROJECT INDEX:
-{index_content}
-
-Formulate a navigation plan. Which pages must be loaded to ensure architectural honesty?
-"""
+        prompt = registry.load("wiki_navigation", include_base=False).format(
+            task=task,
+            index_content=index_content,
+        )
         return self.llm.structured_output(prompt, NavigationDecision, system_instruction)

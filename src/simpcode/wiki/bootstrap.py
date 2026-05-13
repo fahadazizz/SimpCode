@@ -33,14 +33,12 @@ class WikiBootstrap:
 
     def run(self, metadata: ProjectMetadata):
         system_instruction = registry.load("wiki_librarian")
-        prompt = f"""RAW PROJECT METADATA:
-Root: {metadata.root}
-File Tree: {metadata.file_tree}
-Manifests: {metadata.manifests}
-Entry Point Samples: {metadata.entry_point_samples}
-
-Generate the BootstrapResult.
-"""
+        prompt = registry.load("wiki_bootstrap", include_base=False).format(
+            root=metadata.root,
+            file_tree=metadata.file_tree,
+            manifests=metadata.manifests,
+            entry_point_samples=metadata.entry_point_samples,
+        )
         result = self.llm.structured_output(prompt, BootstrapResult, system_instruction)
         
         # 1. Write Cognitive Pages
@@ -78,18 +76,66 @@ Generate the BootstrapResult.
                 description=description[:200]
             ))
             
+        # 2.5 Write Symbol Pages (Phase 2)
+        import re
+        for sym_target in result.symbol_targets:
+            page_id = f"symbols/{sym_target}"
+            sources = []
+            # Shallow guess for symbol source file
+            for f in metadata.file_tree:
+                if f.endswith(".py") or f.endswith(".ts") or f.endswith(".js") or f.endswith(".rs") or f.endswith(".go"):
+                    # Check if file name matches symbol or if we want to just track the symbol
+                    if sym_target.lower() in f.lower():
+                        sources.append(SourceReference(
+                            file_path=f,
+                            hash=calculate_file_hash(str(self.root / f))
+                        ))
+                        break # Just map to first likely file
+                        
+            meta = WikiPageMetadata(
+                id=page_id, 
+                type="symbol", 
+                sources=sources,
+                last_updated=time.time(),
+                title=f"Symbol: {sym_target}"
+            )
+            content = f"# {sym_target}\n\nAuto-indexed symbol. Subject to deep-healing on first navigation.\n"
+            page_path = self.wiki_dir / f"{page_id}.md"
+            page_path.parent.mkdir(parents=True, exist_ok=True)
+            WikiPage(metadata=meta, content=content).to_file(page_path)
+            
         # 3. Initialize Project Index
         idx_manager = IndexManager(self.wiki_dir)
         idx_manager.update_index(module_entries, [], [])
 
     def _guess_main_file(self, mod_name: str, file_tree: List[str]) -> Optional[str]:
+        # Language-agnostic module resolution
         targets = [
+            # Python
             f"{mod_name}/__init__.py",
             f"{mod_name}.py",
             f"src/{mod_name}/__init__.py",
-            f"src/{mod_name}.py"
+            f"src/{mod_name}.py",
+            # JS/TS
+            f"{mod_name}/index.ts",
+            f"{mod_name}/index.js",
+            f"{mod_name}.ts",
+            f"{mod_name}.js",
+            f"src/{mod_name}/index.ts",
+            f"src/{mod_name}/index.js",
+            # Rust / Go
+            f"{mod_name}/main.rs",
+            f"{mod_name}/lib.rs",
+            f"{mod_name}/main.go",
         ]
+        
         for t in targets:
             if t in file_tree:
                 return t
+                
+        # Fallback: fuzzy match
+        for file in file_tree:
+            if f"{mod_name}" in file:
+                return file
+                
         return None

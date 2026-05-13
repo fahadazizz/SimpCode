@@ -3,6 +3,8 @@ from pathlib import Path
 from typing import List, Optional
 from pydantic import BaseModel
 import os
+from simpcode.core.prompts import registry
+from simpcode.utils.paths import PathManager
 
 class SkillMetadata(BaseModel):
     id: str
@@ -43,26 +45,38 @@ class Skill(BaseModel):
         return cls(metadata=metadata, content=body_content)
 
 class SkillLoader:
-    def __init__(self, project_root: Path):
-        self.project_root = project_root
-        self.project_skills_dir = project_root / ".simp" / "skills"
-        self.global_skills_dir = Path.home() / ".simpcode" / "skills"
+    """
+    Discovery and loading of SimpCode skills.
+    Skills can be global (~/.simpcode/skills) or project-local (.simp/skills).
+    Project-local skills override global skills with the same name.
+    """
+    def __init__(self, root: Path):
+        self.root = root
+        self.global_skills_dir = PathManager.get_global_dir() / "skills"
+        self.project_skills_dir = PathManager.get_local_dir(root) / "skills"
 
     def load_all_skills(self) -> List[Skill]:
         skills = []
         
         # Load global skills
-        if self.global_skills_dir.exists():
-            for file in self.global_skills_dir.glob("*.md"):
-                skills.append(Skill.from_file(file))
+        try:
+            if self.global_skills_dir.exists():
+                for file in self.global_skills_dir.glob("*.md"):
+                    skills.append(Skill.from_file(file))
+        except (PermissionError, OSError):
+            # Ignore global skills if inaccessible
+            pass
                 
         # Load project skills (can shadow global skills)
-        if self.project_skills_dir.exists():
-            for file in self.project_skills_dir.glob("*.md"):
-                # Handle overriding (remove global if same id)
-                stem = file.stem
-                skills = [s for s in skills if s.metadata.id != stem]
-                skills.append(Skill.from_file(file))
+        try:
+            if self.project_skills_dir.exists():
+                for file in self.project_skills_dir.glob("*.md"):
+                    # Handle overriding (remove global if same id)
+                    stem = file.stem
+                    skills = [s for s in skills if s.metadata.id != stem]
+                    skills.append(Skill.from_file(file))
+        except (PermissionError, OSError):
+            pass
                 
         return skills
 
@@ -87,15 +101,10 @@ class SkillSelector:
         if not catalog:
             return []
 
-        prompt = f"""USER TASK: {task}
-        
-AVAILABLE SKILLS:
-{catalog}
-
-Based on the task description, select the IDs of any skills that provide specialized reasoning, domain knowledge, or workflows required to complete this task successfully.
-Return ONLY an empty list if no skills are relevant.
-"""
-        from simpcode.core.prompts import registry
+        prompt = registry.load("skill_selector", include_base=False).format(
+            task=task,
+            catalog=catalog,
+        )
         # We can use a lightweight evaluation prompt
         system_instruction = registry.load("research_assistant") # Or create a dedicated one if we had to
         
