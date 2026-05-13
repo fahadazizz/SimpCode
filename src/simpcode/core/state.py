@@ -41,6 +41,8 @@ class SessionManager:
         return None
 
     def list_sessions(self) -> List[Dict[str, Any]]:
+        if not self.sessions_dir.exists():
+            return []
         sessions = []
         for f in self.sessions_dir.glob("*.json"):
             try:
@@ -54,6 +56,21 @@ class SessionManager:
             except:
                 continue
         return sorted(sessions, key=lambda x: x["last_updated"], reverse=True)
+
+    def get_latest_session(self) -> Optional[SessionState]:
+        sessions = self.list_sessions()
+        if sessions:
+            return self.load_session(sessions[0]["id"])
+        return None
+
+    def create_session(self) -> SessionState:
+        sid = f"session_{int(time.time())}"
+        state = SessionState(
+            session_id=sid,
+            project_root=str(self.project_root) if self.project_root else "."
+        )
+        self.save_session(state)
+        return state
 
 class HashRegistry:
     def __init__(self):

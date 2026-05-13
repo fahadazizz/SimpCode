@@ -55,32 +55,44 @@ class SimpWorkflows:
         if not needs_onboarding(root):
             return False
 
-        llm = self._make_llm(provider=provider, model=model)
         analyzer = ProjectAnalyzer(root)
-        synthesizer = IntelligenceSynthesizer(llm)
-        bootstrap = WikiBootstrap(llm, root)
-
         with self.console.status("[bold blue]Collecting codebase metadata..."):
             metadata = analyzer.collect_metadata()
 
-        with self.console.status("[bold blue]Synthesizing Project Intelligence..."):
-            docs = synthesizer.synthesize(metadata)
+        # Detection: If no significant manifests or entry points, it's a skeleton
+        is_skeleton = len(metadata.manifests) == 0 and len(metadata.entry_point_samples) == 0
 
-        with self.console.status("[bold blue]Compiling Initial Wiki (Semantic Core)..."):
-            try:
-                bootstrap.run(metadata)
-            except Exception as bootstrap_error:
-                self.console.print(
-                    f"[yellow]Wiki bootstrap degraded:[/yellow] {bootstrap_error}"
-                )
+        if is_skeleton:
+            with self.console.status("[bold blue]Initializing Project Skeleton..."):
+                ensure_onboarding_artifacts(root)
+                self.console.print("\n[bold green]✓ Skeleton Initialization Complete.[/bold green]")
+                return True
 
-        ensure_onboarding_artifacts(root, docs, metadata)
+        # Legacy Import (Synthesis Required)
+        llm = self._make_llm(provider=provider, model=model)
+        synthesizer = IntelligenceSynthesizer(llm)
+        bootstrap = WikiBootstrap(llm, root)
 
-        self.console.print("\n[bold green]✓ Mission Establishment Complete.[/bold green]")
-        self.console.print(" - [cyan]SIMP.md[/cyan] (Project Intelligence)")
-        if (root / "SPEC.md").exists():
-            self.console.print(" - [cyan]SPEC.md[/cyan] (Optional Project Requirements)")
-        self.console.print(" - [cyan].simp/wiki/[/cyan] (Knowledge Base)")
+        try:
+            with self.console.status("[bold blue]Synthesizing Project Intelligence..."):
+                docs = synthesizer.synthesize(metadata)
+
+            with self.console.status("[bold blue]Compiling Initial Wiki (Semantic Core)..."):
+                try:
+                    bootstrap.run(metadata)
+                except Exception as bootstrap_error:
+                    self.console.print(
+                        f"[yellow]Wiki bootstrap degraded:[/yellow] {bootstrap_error}"
+                    )
+
+            ensure_onboarding_artifacts(root, docs, metadata)
+            self.console.print("\n[bold green]✓ Legacy Import & Synthesis Complete.[/bold green]")
+        except Exception as e:
+            self.console.print(f"[red]Synthesis failed:[/red] {e}")
+            self.console.print("[yellow]Falling back to skeleton initialization...[/yellow]")
+            ensure_onboarding_artifacts(root)
+            self.console.print("\n[bold green]✓ Fallback Initialization Complete.[/bold green]")
+
         return True
 
     def init_project(

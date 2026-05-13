@@ -3,6 +3,7 @@ from typing import List, Dict, Optional
 from pydantic import BaseModel
 import time
 from simpcode.wiki.models import WikiPage, WikiPageMetadata
+from simpcode.wiki.engine import WikiEngine
 from simpcode.core.llm import LLMClient
 from simpcode.core.prompts import registry
 
@@ -20,10 +21,9 @@ class GetBetter:
     def __init__(self, root: Path, llm: LLMClient):
         self.root = root
         self.llm = llm
-        self.wiki_dir = self.root / ".simp" / "wiki"
-        self.wiki_dir.mkdir(parents=True, exist_ok=True)
+        self.wiki = WikiEngine(root)
 
-    def run(self, task: str, execution_trace: str):
+    def run(self, task: str, execution_trace: str, files_modified: List[str] = None, rationale: str = None):
         system_instruction = registry.load("staff_researcher")
         prompt = registry.load("staff_researcher_learning", include_base=False).format(
             task=task,
@@ -32,22 +32,15 @@ class GetBetter:
 
         proposals = self.llm.structured_output(prompt, EvolutionProposals, system_instruction)
         
-        # 1. Update changes.md (Structural update is automatic)
-        self._append_to_changes(proposals.change_log_entry)
+        # 1. Update changes.md through the high-integrity WikiEngine
+        self.wiki.append_change_log(
+            task_description=task,
+            files_modified=files_modified or [],
+            rationale=rationale or proposals.change_log_entry
+        )
         
         # 2. Surface cognitive proposals for human validation
         return proposals
-
-    def _append_to_changes(self, entry: str):
-        path = self.wiki_dir / "changes.md"
-        header = f"\n### [{time.strftime('%Y-%m-%d %H:%M:%S')}] Evolution\n"
-        
-        if not path.exists():
-            meta = WikiPageMetadata(id="changes", type="structural", last_updated=time.time())
-            WikiPage(metadata=meta, content="# Change Log\n\nSemantic history of system evolution.").to_file(path)
-            
-        with open(path, "a") as f:
-            f.write(header + entry + "\n")
 
     def append_proposals(self, proposals: EvolutionProposals):
         """Append accepted proposals to respective cognitive wiki layers."""
@@ -59,17 +52,12 @@ class GetBetter:
         if not items:
             return
             
-        path = self.wiki_dir / filename
-        meta = None
-        if not path.exists():
-            from simpcode.wiki.models import WikiPageMetadata, WikiPage
-            import time
-            meta = WikiPageMetadata(id=filename.split(".")[0], type="cognitive", last_updated=time.time())
+        page = self.wiki.get_page(filename.replace(".md", ""))
+        if not page:
+            meta = WikiPageMetadata(id=filename.replace(".md", ""), type="cognitive", last_updated=time.time())
             current_content = f"# {title}\n\nProject {title.lower()}.\n"
+            page = WikiPage(metadata=meta, content=current_content)
         else:
-            from simpcode.wiki.models import WikiPage
-            page = WikiPage.from_file(path)
-            meta = page.metadata
             current_content = page.content
             
         # Use LLM to smartly merge and dedup
@@ -90,7 +78,7 @@ class GetBetter:
             # Fallback if LLM fails
             new_content = current_content + "\n### Added new items\n" + "\n".join(f"- {i}" for i in items)
             
-        from simpcode.wiki.models import WikiPage
-        import time
-        meta.last_updated = time.time()
-        WikiPage(metadata=meta, content=new_content).to_file(path)
+        page.content = new_content
+        page.metadata.last_updated = time.time()
+        self.wiki.save_page(page)
+

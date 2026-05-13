@@ -114,8 +114,10 @@ class TakeAction:
                         else:
                             harness.patch_file(file_path, tool_call.args["old_string"], tool_call.args["new_string"])
 
-                        # Inline Wiki Update (SDD 9.5)
-                        self._update_wiki(file_path)
+                        # High-Integrity Inline Wiki Update (SDD 9.5)
+                        # Prevents desync and expensive re-scans
+                        wiki = WikiEngine(self.root)
+                        self._update_wiki(file_path, wiki)
                         files_modified.add(file_path)
 
                         lint_result = harness.run_shell(f"flake8 {file_path}")
@@ -176,26 +178,26 @@ class TakeAction:
             
         return execution_trace
 
-    def _update_wiki(self, file_path: str):
-        """Synchronizes relevant Wiki pages with recent file changes."""
+    def _update_wiki(self, file_path: str, wiki: WikiEngine):
+        """Synchronizes relevant Wiki pages with recent file changes using O(1) lookup."""
         try:
-            wiki = WikiEngine(self.root)
-            pages = wiki.get_all_pages()
-            for page in pages:
-                # Check if this page tracks the modified file
-                if any(s.file_path == file_path for s in page.metadata.sources):
-                    instruction = registry.load("wiki_maintainer")
-                    full_path = self.root / file_path
-                    if not full_path.exists():
-                        continue
-                        
-                    code_context = f"--- {file_path} ---\n{full_path.read_text()[:5000]}"
-                    prompt = f"OLD CONTENT:\n{page.content}\n\nCurrent Code:\n{code_context}\n\nUpdate page."
+            page_ids = wiki.get_pages_for_file(file_path)
+            for page_id in page_ids:
+                page = wiki.get_page(page_id)
+                if not page:
+                    continue
+                
+                instruction = registry.load("wiki_maintainer")
+                full_path = self.root / file_path
+                if not full_path.exists():
+                    continue
                     
-                    # Update page content
-                    page.content = self.llm.chat([{"role": "user", "content": prompt}], instruction)
-                    page.metadata.last_updated = time.time()
-                    wiki.save_page(page)
-                    self.console.print(f"  [Wiki] Synced {page.metadata.id} with changes in {file_path}")
+                code_context = f"--- {file_path} ---\n{full_path.read_text()[:5000]}"
+                prompt = f"OLD CONTENT:\n{page.content}\n\nCurrent Code:\n{code_context}\n\nUpdate page."
+                
+                # Update page content and High-Integrity Hash Sync
+                page.content = self.llm.chat([{"role": "user", "content": prompt}], instruction)
+                wiki.sync_hashes(page) 
+                self.console.print(f"  [Wiki] Synced and Verified {page.metadata.id} with {file_path}")
         except Exception as e:
             self.console.print(f"  [yellow][!] Wiki sync degraded for {file_path}: {e}[/yellow]")

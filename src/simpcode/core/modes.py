@@ -17,6 +17,7 @@ class ScanScene:
     """
     def __init__(self, root: Path, llm: LLMClient):
         self.root = root
+        self.llm = llm
         self.wiki = WikiEngine(root)
         self.navigator = WikiNavigator(llm)
         self.budgeter = ContextBudgeter(model=llm.model_id)
@@ -29,17 +30,22 @@ class ScanScene:
         for name in ["SIMP.md", "SPEC.md"]:
             p = self.root / name
             if p.exists():
-                # SIMP.md is the Framework (Priority 0); SPEC.md is the Contract (Priority 0)
                 mandatory.append(ContextItem(id=name, content=p.read_text(), priority=0))
+        
+        # 1.1 Load and Verify Mandatory Wiki Nodes (SDD 7.2)
+        for page_id in ["index", "invariants"]:
+            page = self.wiki.get_page(page_id)
+            if not page:
+                continue
+            
+            if self.wiki.is_page_stale(page):
+                print(f"  [Scan] Auto-healing ground-truth: {page_id}")
+                self._heal_page(page)
+            
+            mandatory.append(ContextItem(id=f"{page_id}.md", content=page.content, priority=1))
         
         index_page = self.wiki.get_page("index")
         index_content = index_page.content if index_page else "# No index found"
-        mandatory.append(ContextItem(id="index.md", content=index_content, priority=1))
-        
-        # 1.1 Load Cognitive Layers (Invariants are non-negotiable)
-        invariants_page = self.wiki.get_page("invariants")
-        if invariants_page:
-            mandatory.append(ContextItem(id="invariants.md", content=invariants_page.content, priority=1))
         
         # 1.5 Load Relevant Skills
         available_skills = self.skill_loader.load_all_skills()
@@ -49,13 +55,12 @@ class ScanScene:
             mandatory.append(ContextItem(id=f"SKILL: {skill.metadata.id}", content=skill.content, priority=1))
 
         # 2. Multi-Pass Strategic Navigation
-        loaded_page_ids: Set[str] = set()
+        loaded_page_ids: Set[str] = {"index", "invariants"}
         semantic_items: List[ContextItem] = []
         targeted_items: List[ContextItem] = []
         
-        max_passes = 2 # Usually sufficient to resolve links
+        max_passes = 2 
         for pass_num in range(max_passes):
-            # Formulate query with currently known context
             decision = self.navigator.navigate(
                 f"{task}\n(Currently loaded: {', '.join(loaded_page_ids)})", 
                 index_content
@@ -75,29 +80,7 @@ class ScanScene:
                 # Check Freshness per Spec 7.2 & 4.4
                 if self.wiki.is_page_stale(page):
                     print(f"  [Scan] Auto-healing stale Wiki page: {page_id}")
-                    instruction = registry.load("wiki_maintainer")
-                    code_context = ""
-                    for source in page.metadata.sources:
-                        full_path = self.root / source.file_path
-                        if full_path.exists():
-                            code_context += f"--- {source.file_path} ---\n{full_path.read_text()[:5000]}\n\n"
-                    
-                    if code_context:
-                        prompt = f"OLD CONTENT:\n{page.content}\n\nCurrent Code:\n{code_context}\n\nUpdate page."
-                        page.content = self.llm.chat([{"role": "user", "content": prompt}], instruction)
-                        page.metadata.last_updated = time.time()
-                        for source in page.metadata.sources:
-                            full_path = self.root / source.file_path
-                            if full_path.exists():
-                                if source.start_line and source.end_line:
-                                    source.hash = calculate_range_hash(str(full_path), source.start_line, source.end_line)
-                                else:
-                                    source.hash = calculate_file_hash(str(full_path))
-                        self.wiki.save_page(page)
-                        print(f"  [Scan] Successfully healed {page_id}")
-                    else:
-                        print(f"  [Scan] Warning: Source files deleted for {page_id}. Excluded.")
-                        continue
+                    self._heal_page(page)
                 
                 semantic_items.append(ContextItem(id=page_id, content=page.content, priority=2))
                 # Resolve File:Line pointers (Targeted Tier)
@@ -116,3 +99,20 @@ class ScanScene:
 
         # 3. Deterministic Assembly (Tiered Budget Enforcement)
         return self.budgeter.assemble(mandatory, semantic_items, targeted_items)
+
+    def _heal_page(self, page: WikiPage):
+        """Regenerates a Wiki page to match current source truth."""
+        instruction = registry.load("wiki_maintainer")
+        code_context = ""
+        for source in page.metadata.sources:
+            full_path = self.root / source.file_path
+            if full_path.exists():
+                code_context += f"--- {source.file_path} ---\n{full_path.read_text()[:5000]}\n\n"
+        
+        if code_context:
+            prompt = f"OLD CONTENT:\n{page.content}\n\nCurrent Code:\n{code_context}\n\nUpdate page."
+            page.content = self.llm.chat([{"role": "user", "content": prompt}], instruction)
+            self.wiki.sync_hashes(page) # High-Integrity Sync
+        else:
+            print(f"  [Scan] Warning: Source files deleted for {page.metadata.id}. Excluded.")
+
