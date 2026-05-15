@@ -42,7 +42,11 @@ class DocumentGenerator:
         self.root = root
 
     def write_docs(self, docs: SynthesizedDocs, overwrite_spec: bool = False):
+        simp_content = docs.simp_md.strip()
         spec_content = docs.spec_md.strip()
+
+        if simp_content:
+            (self.root / "SIMP.md").write_text(simp_content + "\n")
 
         if spec_content:
             (self.root / "SPEC.md").write_text(spec_content + "\n")

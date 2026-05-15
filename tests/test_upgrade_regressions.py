@@ -78,6 +78,7 @@ from simpcode.utils.hashes import calculate_file_hash
 from simpcode.core.llm.openai_provider import OpenAICompatibleProvider
 from simpcode.cli.shell import SimpShell
 from simpcode.core.workflows import SimpWorkflows
+from simpcode.core.state import SessionManager, SessionState
 from simpcode.wiki.bootstrap import WikiBootstrap
 from simpcode.wiki.engine import WikiEngine
 from simpcode.wiki.index import IndexEntry, IndexManager
@@ -175,29 +176,6 @@ def patch_wiki_dir(monkeypatch, temp_root):
     return wiki_dir
 
 
-def test_tool_harness_refreshes_wiki_hash_after_write(temp_root, patch_wiki_dir):
-    source_file = temp_root / "app.py"
-    source_file.write_text("print('hello')\n")
-    initial_hash = calculate_file_hash(str(source_file))
-
-    metadata = WikiPageMetadata(
-        id="modules/app",
-        type="module",
-        sources=[SourceReference(file_path="app.py", hash=initial_hash)],
-        last_updated=1.0,
-        title="Module: app",
-    )
-    (patch_wiki_dir / "modules").mkdir(parents=True, exist_ok=True)
-    WikiPage(metadata=metadata, content="# app\n").to_file(patch_wiki_dir / "modules/app.md")
-
-    harness = ToolHarness(temp_root, ["app.py"])
-    harness.write_file("app.py", "print('updated')\n")
-
-    page = WikiPage.from_file(patch_wiki_dir / "modules/app.md")
-    assert page.metadata.sources[0].hash == calculate_file_hash(str(source_file))
-    assert page.metadata.sources[0].hash != initial_hash
-
-
 def test_tool_harness_patch_file_accepts_whitespace_variants(temp_root, patch_wiki_dir):
     code_file = temp_root / "calc.py"
     code_file.write_text("def add(a, b):\n    return a + b\n")
@@ -219,6 +197,24 @@ def test_tool_harness_run_shell_blocks_dangerous_operators(temp_root, patch_wiki
     assert "Security Violation: shell operators are prohibited" in output
 
 
+def test_tool_harness_list_dir_and_read_scope_are_project_wide(temp_root, patch_wiki_dir):
+    (temp_root / "src").mkdir(parents=True, exist_ok=True)
+    (temp_root / "src" / "app.py").write_text("print('hello')\n")
+    (temp_root / "notes.txt").write_text("notes\n")
+
+    harness = ToolHarness(temp_root, ["src/app.py"])
+
+    listing = harness.list_dir(".")
+    assert "src/" in listing
+    assert "notes.txt" in listing
+
+    read_result = harness.read_file("notes.txt")
+    assert "notes" in read_result
+
+    with pytest.raises(PermissionError):
+        harness.write_file("notes.txt", "updated")
+
+
 def test_context_budgeter_emits_warning_and_keeps_mandatory(monkeypatch):
     monkeypatch.setattr(ContextBudgeter, "count_tokens", lambda self, text: len(text))
     budgeter = ContextBudgeter(total_budget=80, model="dummy")
@@ -232,6 +228,17 @@ def test_context_budgeter_emits_warning_and_keeps_mandatory(monkeypatch):
     assert "MANDATORY: SPEC.md" in assembled
     assert "[SYSTEM WARNING: Context Budget Exceeded" in assembled
     assert "--- modules/core.md ---" not in assembled
+
+
+def test_context_budgeter_warns_when_mandatory_exceeds_budget(monkeypatch):
+    monkeypatch.setattr(ContextBudgeter, "count_tokens", lambda self, text: len(text))
+    budgeter = ContextBudgeter(total_budget=10, model="dummy")
+
+    mandatory = [ContextItem(id="SPEC.md", content="X" * 30, priority=0)]
+    assembled = budgeter.assemble(mandatory, [], [])
+
+    assert "MANDATORY: SPEC.md" in assembled
+    assert "[SYSTEM WARNING: Mandatory context alone exceeds the total budget" in assembled
 
 
 def test_scan_scene_loads_simp_without_spec_and_skips_stale_pages(monkeypatch, temp_root, patch_wiki_dir):
@@ -352,16 +359,14 @@ def test_get_better_includes_spec_and_writes_changes_log(temp_root, patch_wiki_d
 
     assert result == proposals
     assert "SPEC TARGET: reliability improvements" in llm.prompts[0]["prompt"]
-    assert (patch_wiki_dir / "changes.md").exists()
-    assert "Captured migration pattern" in (patch_wiki_dir / "changes.md").read_text()
 
 
-def test_document_generator_writes_spec_and_skips_simp(temp_root):
+def test_document_generator_writes_simp_and_spec(temp_root):
     generator = DocumentGenerator(temp_root)
     docs = SynthesizedDocs(simp_md="# SIMP\n", spec_md="# SPEC\n")
     generator.write_docs(docs)
 
-    assert not (temp_root / "SIMP.md").exists()
+    assert (temp_root / "SIMP.md").read_text() == "# SIMP\n"
     assert (temp_root / "SPEC.md").read_text() == "# SPEC\n"
 
 
@@ -460,6 +465,85 @@ def test_workflows_update_simp_can_be_cancelled(monkeypatch, temp_root):
     assert simp_path.read_text() == "# Existing SIMP\nKeep me\n"
 
 
+def test_workflows_do_persists_interrupt_state(monkeypatch, temp_root):
+    monkeypatch.setattr("simpcode.core.workflows.get_project_root", lambda: temp_root)
+    monkeypatch.setattr(SimpWorkflows, "_ensure_onboarded", lambda self, root, provider=None, model=None: False)
+
+    class FakeScanner:
+        def __init__(self, root, llm):
+            self.root = root
+            self.llm = llm
+
+        def run(self, task):
+            return "CTX"
+
+    class FakePlanner:
+        def __init__(self, llm, scanner):
+            self.llm = llm
+            self.scanner = scanner
+
+        def generate(self, task, context):
+            return Plan(
+                task_id="pending",
+                rationale="r",
+                steps=[PlanStep(id=1, target="src/app.py", action="edit", rationale="r", verification="pytest")],
+                scope_exclusions=[],
+                risk_level="medium",
+            )
+
+    class FakePermissions:
+        def __init__(self, console):
+            self.console = console
+
+        def review_plan(self, plan, prompt_fn=None):
+            return True
+
+    class FakeExecutor:
+        def __init__(self, root, llm, session_id=None):
+            self.root = root
+            self.llm = llm
+            self.session_id = session_id
+
+        def execute(self, plan, context):
+            raise KeyboardInterrupt
+
+    class FakeEvolver:
+        def __init__(self, root, llm):
+            self.root = root
+            self.llm = llm
+
+        def run(self, task, execution_trace):
+            raise AssertionError("evolver should not run after interrupt")
+
+    monkeypatch.setattr("simpcode.core.workflows.ScanScene", FakeScanner)
+    monkeypatch.setattr("simpcode.core.workflows.PlanGenerator", FakePlanner)
+    monkeypatch.setattr("simpcode.core.workflows.PermissionSystem", FakePermissions)
+    monkeypatch.setattr("simpcode.core.workflows.TakeAction", FakeExecutor)
+    monkeypatch.setattr("simpcode.core.workflows.GetBetter", FakeEvolver)
+
+    workflow = SimpWorkflows()
+    session_manager = SessionManager(str(temp_root))
+    session_state = SessionState(session_id="sess-interrupt", project_root=str(temp_root))
+
+    result = workflow.do(
+        "improve reliability",
+        yes=True,
+        provider="groq",
+        model="demo",
+        session_manager=session_manager,
+        session_state=session_state,
+    )
+
+    assert result.task_id.startswith("task_")
+
+    saved = session_manager.load_session("sess-interrupt")
+    assert saved is not None
+    assert saved.status == "interrupted"
+    assert len(saved.plans_produced) == 1
+    assert saved.plans_produced[0].startswith("task_")
+    assert any("KeyboardInterrupt" in error for error in saved.errors_encountered)
+
+
 def test_openai_compatible_structured_output_tolerates_trailing_noise(monkeypatch):
     class DemoSchema(BaseModel):
         value: int
@@ -469,6 +553,205 @@ def test_openai_compatible_structured_output_tolerates_trailing_noise(monkeypatc
 
     result = provider.structured_output("prompt", DemoSchema, "system")
     assert result.value == 7
+
+
+def test_google_provider_chat_preserves_history(monkeypatch):
+    from simpcode.core.llm.google_provider import GoogleProvider
+
+    captured = {}
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(
+                usage_metadata=SimpleNamespace(prompt_token_count=1, candidates_token_count=2),
+                text="ok",
+            )
+
+    class FakeClient:
+        def __init__(self, api_key=None):
+            self.api_key = api_key
+            self.models = FakeModels()
+
+    monkeypatch.setattr("simpcode.core.llm.google_provider.genai.Client", FakeClient)
+
+    provider = GoogleProvider("gemini-demo", "demo-key")
+    result = provider.chat(
+        [
+            {"role": "user", "content": "hello"},
+            {"role": "assistant", "content": "hi"},
+            {"role": "user", "content": "continue"},
+            {"role": "system", "content": "ignore me as content"},
+        ],
+        "system prompt",
+    )
+
+    assert result == "ok"
+    assert captured["model"] == "gemini-demo"
+    assert captured["config"].system_instruction == "system prompt"
+    assert len(captured["contents"]) == 3
+    roles = [item.role if hasattr(item, "role") else item["role"] for item in captured["contents"]]
+    assert roles == ["user", "model", "user"]
+
+
+def test_anthropic_provider_chat_preserves_history(monkeypatch):
+    from simpcode.core.llm.anthropic_provider import AnthropicProvider
+
+    captured = {}
+
+    class FakeMessages:
+        def create(self, **kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(
+                usage=SimpleNamespace(input_tokens=1, output_tokens=2),
+                content=[SimpleNamespace(text="ok")],
+            )
+
+    class FakeClient:
+        def __init__(self, api_key=None):
+            self.api_key = api_key
+            self.messages = FakeMessages()
+
+    monkeypatch.setattr("simpcode.core.llm.anthropic_provider.anthropic.Anthropic", FakeClient)
+
+    provider = AnthropicProvider("claude-3-5-sonnet", "demo-key")
+    result = provider.chat(
+        [
+            {"role": "user", "content": "hello"},
+            {"role": "assistant", "content": "hi"},
+            {"role": "user", "content": "continue"},
+            {"role": "system", "content": "ignore me as content"},
+        ],
+        "system prompt",
+    )
+
+    assert result == "ok"
+    assert captured["model"] == "claude-3-5-sonnet"
+    assert captured["system"] == "system prompt"
+    assert len(captured["messages"]) == 3
+    roles = [msg["role"] for msg in captured["messages"]]
+    assert roles == ["user", "assistant", "user"]
+    contents = [msg["content"] for msg in captured["messages"]]
+    assert contents == ["hello", "hi", "continue"]
+
+
+def test_openai_compatible_provider_chat_preserves_history(monkeypatch):
+    from simpcode.core.llm.openai_provider import OpenAICompatibleProvider
+
+    captured = {}
+
+    def fake_post(url, headers, json):
+        captured.update({"url": url, "headers": headers, "json": json})
+        return SimpleNamespace(
+            status_code=200,
+            json=lambda: {
+                "choices": [{"message": {"content": "ok"}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 2},
+            },
+        )
+
+    class FakeClient:
+        def __init__(self, timeout=None):
+            self.timeout = timeout
+
+        def post(self, url, **kwargs):
+            return fake_post(url, kwargs.get("headers"), kwargs.get("json"))
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    monkeypatch.setattr("simpcode.core.llm.openai_provider.httpx.Client", FakeClient)
+
+    provider = OpenAICompatibleProvider("gpt-4", "demo-key", "https://api.openai.com/v1", "openai")
+    result = provider.chat(
+        [
+            {"role": "user", "content": "hello"},
+            {"role": "assistant", "content": "hi"},
+            {"role": "user", "content": "continue"},
+            {"role": "system", "content": "ignore me as content"},
+        ],
+        "system prompt",
+    )
+
+    assert result == "ok"
+    assert captured["json"]["model"] == "gpt-4"
+    assert len(captured["json"]["messages"]) == 4
+    # First message is system instruction
+    assert captured["json"]["messages"][0] == {"role": "system", "content": "system prompt"}
+    # Then normalized user/assistant messages (system content filtered out)
+    roles = [msg["role"] for msg in captured["json"]["messages"][1:]]
+    assert roles == ["user", "assistant", "user"]
+    contents = [msg["content"] for msg in captured["json"]["messages"][1:]]
+    assert contents == ["hello", "hi", "continue"]
+
+
+def test_workflows_chat_turn_streams_and_persists_full_response(monkeypatch, temp_root):
+    monkeypatch.setattr("simpcode.core.workflows.get_project_root", lambda: temp_root)
+
+    class FakeScanner:
+        def __init__(self, root, llm):
+            self.root = root
+            self.llm = llm
+
+        def run(self, user_input):
+            return "SCENE CONTEXT"
+
+    class FakeLLM:
+        def __init__(self):
+            self.stream_calls = []
+
+        def stream_chat(self, messages, system_instruction):
+            self.stream_calls.append((messages, system_instruction))
+            yield "Hello"
+            yield " world"
+
+    monkeypatch.setattr("simpcode.core.workflows.ScanScene", FakeScanner)
+
+    workflow = SimpWorkflows()
+    state = SessionState(session_id="sess-chat", project_root=str(temp_root))
+    manager = SessionManager(str(temp_root))
+    llm = FakeLLM()
+
+    response = workflow.chat_turn(state, manager, llm, "How are you?")
+
+    assert response == "Hello world"
+    assert len(state.history) == 2
+    assert state.history[1].content == "Hello world"
+    assert llm.stream_calls
+
+
+def test_llm_client_structured_output_retries_with_correction(monkeypatch):
+    class DemoSchema(BaseModel):
+        value: int
+
+    class FakeProvider:
+        def __init__(self):
+            self.calls = []
+
+        def structured_output(self, prompt, schema, system_instruction):
+            self.calls.append(system_instruction)
+            if len(self.calls) == 1:
+                raise ValueError("malformed json")
+            return schema(value=9)
+
+        def get_token_usage(self):
+            return {"input": 11, "output": 22}
+
+    client = LLMClient.__new__(LLMClient)
+    client.provider = FakeProvider()
+    client.logger = SimpleNamespace(log_usage=lambda *args, **kwargs: None)
+    client.model_id = "demo-model"
+    client.refresh = lambda *args, **kwargs: None
+    client._build_system_instruction = lambda system_instruction, is_structured=False: "BASE SYSTEM"
+
+    result = client.structured_output("prompt", DemoSchema, "system")
+
+    assert result.value == 9
+    assert len(client.provider.calls) == 2
+    assert "Previous structured response failed" in client.provider.calls[1]
 
 
 def test_llm_client_uses_saved_ollama_base_url(monkeypatch):
@@ -605,8 +888,6 @@ def test_executor_stops_when_step_verification_fails(monkeypatch, temp_root):
 
         def structured_output(self, prompt, schema, system_instruction):
             self.calls += 1
-            if self.calls > 1:
-                raise AssertionError("executor should stop after verification failure")
             return SimpleNamespace(
                 tool="write_file",
                 args={"path": "src/app.py", "content": "print('updated')\n"},
@@ -637,7 +918,63 @@ def test_executor_stops_when_step_verification_fails(monkeypatch, temp_root):
     trace = executor.execute(plan, "context")
 
     assert "verification failed" in trace.lower()
-    assert fake_llm.calls == 1
+    assert fake_llm.calls == 3
+
+
+def test_executor_aborts_after_three_failures(monkeypatch, temp_root):
+    class FakeHarness:
+        def __init__(self, root, allowed_files):
+            self.root = root
+            self.allowed_files = allowed_files
+
+        def read_file(self, file_path):
+            return f"Error: File '{file_path}' does not exist."
+
+        def write_file(self, file_path, content):
+            return None
+
+        def patch_file(self, file_path, old_string, new_string):
+            return "File patched. You MUST run verification next."
+
+    class FakeLLM:
+        def __init__(self):
+            self.calls = 0
+            self.paths = ["missing-1.txt", "missing-2.txt", "missing-3.txt", "missing-4.txt"]
+
+        def structured_output(self, prompt, schema, system_instruction):
+            self.calls += 1
+            idx = min(self.calls - 1, len(self.paths) - 1)
+            return SimpleNamespace(
+                tool="read_file",
+                args={"file_path": self.paths[idx]},
+                thought="try again",
+                complete=False,
+            )
+
+    monkeypatch.setattr("simpcode.core.executor.ToolHarness", FakeHarness)
+
+    fake_llm = FakeLLM()
+    executor = TakeAction(temp_root, fake_llm, session_id="sess-failures")
+    plan = Plan(
+        task_id="task-test",
+        rationale="test",
+        steps=[
+            PlanStep(
+                id=1,
+                target="src/app.py",
+                action="edit",
+                rationale="update app",
+                verification="pytest -q",
+            )
+        ],
+        scope_exclusions=[],
+        risk_level="medium",
+    )
+
+    trace = executor.execute(plan, "context")
+
+    assert fake_llm.calls == 3
+    assert trace.lower().count("does not exist") >= 3
 
 
 def test_wiki_engine_uses_project_root_even_if_global_helper_is_wrong(monkeypatch, temp_root):

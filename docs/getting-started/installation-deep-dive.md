@@ -1,77 +1,121 @@
-# Detailed Installation Guide
+# Installation Deep Dive
 
-This guide covers systematic ways to install SimpCode across different environments and configurations.
+This page covers installation details, environment setup, and common pitfalls.
 
----
+## 1. Python and Environment Requirements
 
-## Method 1: Automated Script (Recommended)
+SimpCode currently requires Python `>=3.12`.
 
-Our `install.sh` script is designed for production-grade environments where you want `simp` to be available globally without polluting your system Python.
+Recommended setup:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/fahadazizz/simpcode/main/install.sh | bash
+python -m venv .venv
+source .venv/bin/activate
 ```
 
-### What happens under the hood?
-1.  **Discovery**: Finds an appropriate location for the binary (Default: `~/.local/share/simpcode`).
-2.  **Clone**: Checks out the latest stable version of the source code.
-3.  **Venv Creation**: Creates a dedicated virtual environment to isolate dependencies like `rich`, `click`, and `pydantic`.
-4.  **Dependency Resolution**: Installs all required packages into the isolated environment.
-5.  **Symlink**: Creates a pointer from your system `PATH` (e.g., `/usr/local/bin/simp`) to the executable in the virtual environment.
-
----
-
-##  Method 2: Manual Developer Installation
-
-If you intend to contribute to SimpCode or want total control over the installation path:
-
-1.  **Clone the Repo**:
-    ```bash
-    git clone https://github.com/fahadazizz/simpcode.git
-    cd simpcode
-    ```
-
-2.  **Create a Virtual Environment**:
-    ```bash
-    python -m venv .venv
-    source .venv/bin/activate
-    ```
-
-3.  **Install in Editable Mode**:
-    This allows you to change the source code and see the impact immediately in the `simp` command.
-    ```bash
-    pip install -e .
-    ```
-
----
-
-## Method 3: Dockerized Environment
-
-For environments where you cannot install Python locally, or for CI/CD pipelines.
-
-1.  **Build the Image**:
-    ```bash
-    docker build -t simpcode:latest .
-    ```
-
-2.  **Run with Volume Mapping**:
-    You must map your local repository into the container so SimpCode can see it.
-    ```bash
-    docker run -it -v $(pwd):/app -v ~/.simpcode:/root/.simpcode simpcode:latest chat
-    ```
-
----
-
-## Verifying Installation
-
-To ensure everything is working correctly, check the version and help text:
+Install package:
 
 ```bash
-simp --version
+pip install -e .
+```
+
+Why editable mode:
+
+- easier local development,
+- command updates reflect immediately,
+- docs and code iteration remain synchronized.
+
+## 2. Dependency Notes
+
+Core runtime dependencies include:
+
+- Click and Rich for CLI/TUI UX
+- Pydantic for structured models
+- Prompt Toolkit for interactive shell
+- provider SDKs and HTTP tooling
+- YAML parsing for wiki frontmatter
+- `tiktoken` for token budgeting logic
+
+Install through `pip install -e .` using `pyproject.toml` metadata.
+
+## 3. Verifying Installation
+
+Basic checks:
+
+```bash
 simp --help
+simp setup
 ```
 
-### Troubleshooting
-- **`command not found: simp`**: Your shell's `PATH` variable might not include the installation directory. Add `export PATH="$HOME/.local/bin:$PATH"` to your `.zshrc` or `.bashrc`.
-- **`ModuleNotFoundError`**: Ensure you are not running `simp` from a shell that has a conflicting virtual environment active.
-- **SSL Errors**: If using the curl script, ensure `ca-certificates` are up to date on your OS.
+If command is not found:
+
+- verify virtual environment is active,
+- reinstall editable package,
+- ensure shell sees venv bin path.
+
+## 4. Provider Setup Deep Details
+
+Run:
+
+```bash
+simp setup
+```
+
+You will be prompted for:
+
+- provider
+- model ID
+- API key (except Ollama)
+- Ollama base URL when provider is Ollama
+
+Supported setup providers:
+
+- `groq`
+- `anthropic`
+- `openai`
+- `openrouter`
+- `google`
+- `ollama`
+
+## 5. Where Config Is Stored
+
+ConfigManager attempts writable path in this order:
+
+1. `~/.simpcode/config.json`
+2. `<project>/.simp/config.json`
+
+If global path is writable, that is preferred.
+
+## 6. Clean Reinstall Procedure
+
+If environment is broken:
+
+```bash
+deactivate || true
+rm -rf .venv
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+Then rerun provider setup:
+
+```bash
+simp setup
+```
+
+## 7. Optional Local-Only Provider Path
+
+If using local Ollama:
+
+- set provider to `ollama`,
+- configure reachable base URL,
+- verify Ollama server is running before using ask/do flows.
+
+## 8. Installation Validation Checklist
+
+1. `simp` launches without crashing.
+2. `simp setup` writes config.
+3. `simp init` enters TUI.
+4. `/status` and `/wiki list` execute.
+5. `/ask` returns contextual response.

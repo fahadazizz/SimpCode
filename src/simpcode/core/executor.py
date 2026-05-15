@@ -43,7 +43,11 @@ class TakeAction:
 
         def _verification_failed(result: str) -> bool:
             normalized = result.upper()
-            return any(token in normalized for token in ["EXECUTION FAILURE", "SECURITY VIOLATION", "PLAN VIOLATION", "ERROR"])
+            return any(token in normalized for token in ["EXECUTION FAILURE", "SECURITY VIOLATION", "PLAN VIOLATION"])
+
+        def _is_tool_failure(result: str) -> bool:
+            normalized = result.upper().lstrip()
+            return normalized.startswith("ERROR:") or normalized.startswith("EXECUTION FAILURE") or normalized.startswith("SECURITY VIOLATION") or normalized.startswith("PLAN VIOLATION")
         
         for step in plan.steps:
             if scanner and task:
@@ -56,7 +60,8 @@ class TakeAction:
             
             step_complete = False
             step_turns = 0
-            max_step_turns = 30 # Increased for production readiness 
+            step_failures = 0
+            max_step_turns = 30 # Hard ceiling; failure counter enforces the spec's 3-failure rule
             
             while not step_complete and step_turns < max_step_turns:
                 step_turns += 1
@@ -75,7 +80,11 @@ class TakeAction:
                     )
                 except Exception as e:
                     self.console.print(f"  [bold red][!] Reasoning Failure:[/bold red] {e}")
-                    break
+                    step_failures += 1
+                    if step_failures >= 3:
+                        self.console.print(f"  [yellow]Aborting step {step.id} after {step_failures} reasoning failures.[/yellow]")
+                        break
+                    continue
 
                 self.console.print(f"  [dim][Thought]:[/dim] {tool_call.thought}")
                 
@@ -100,6 +109,8 @@ class TakeAction:
                     
                     if tool_call.tool == "read_file":
                         result = harness.read_file(_tool_path(tool_call.args))
+                        if _is_tool_failure(result):
+                            status = "failure"
                     elif tool_call.tool in ["write_file", "patch_file"]:
                         file_path = _tool_path(tool_call.args)
                         if file_path not in allowed_files:
@@ -151,7 +162,12 @@ class TakeAction:
                     if status == "success" and tool_call.tool == "read_file" and result:
                         current_context += f"\n\n--- TOOL RESULT: {tool_call.tool} {tool_signature} ---\n{result[:4000]}"
 
-                    if status in {"failure", "error"} and ("Plan Violation" in result or "verification failed" in result.lower()):
+                    if status in {"failure", "error"}:
+                        step_failures += 1
+                        if step_failures >= 3:
+                            self.console.print(f"  [yellow]Aborting step {step.id} after {step_failures} failures.[/yellow]")
+                            break
+                    if status in {"failure", "error"} and "Plan Violation" in result:
                         break
                     
                 except Exception as e:
@@ -188,16 +204,7 @@ class TakeAction:
                     continue
                 
                 instruction = registry.load("wiki_maintainer")
-                full_path = self.root / file_path
-                if not full_path.exists():
-                    continue
-                    
-                code_context = f"--- {file_path} ---\n{full_path.read_text()[:5000]}"
-                prompt = f"OLD CONTENT:\n{page.content}\n\nCurrent Code:\n{code_context}\n\nUpdate page."
-                
-                # Update page content and High-Integrity Hash Sync
-                page.content = self.llm.chat([{"role": "user", "content": prompt}], instruction)
-                wiki.sync_hashes(page) 
-                self.console.print(f"  [Wiki] Synced and Verified {page.metadata.id} with {file_path}")
+                if wiki.regenerate_page_from_code(page, self.llm, instruction):
+                    self.console.print(f"  [Wiki] Synced and Verified {page.metadata.id} with {file_path}")
         except Exception as e:
             self.console.print(f"  [yellow][!] Wiki sync degraded for {file_path}: {e}[/yellow]")

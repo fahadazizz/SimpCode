@@ -1,5 +1,5 @@
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 from typing import List, Dict, Optional
 from pathlib import Path
 
@@ -15,6 +15,8 @@ class WikiPageMetadata(BaseModel):
     sources: List[SourceReference] = []
     last_updated: float
     title: Optional[str] = None
+    # Internal tracking for O(s) registry cleanup (not serialized, not in model_dump)
+    _previous_sources: List[SourceReference] = PrivateAttr(default_factory=list)
 
 class WikiPage(BaseModel):
     metadata: WikiPageMetadata

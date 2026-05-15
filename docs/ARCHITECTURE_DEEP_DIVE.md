@@ -1,653 +1,300 @@
-# SimpCode Architecture Deep Dive
+# Architecture Deep Dive
 
-This document explains the internal architecture and design decisions in SimpCode.
+This deep dive documents SimpCode internals from entrypoint to persistence with implementation-level accuracy.
 
-**For Users**: Start with the [Comprehensive Guide](COMPREHENSIVE_GUIDE.md)  
-**For Developers**: This document explains the system design
+## 1. Entrypoints and Command Surface
 
----
+### CLI group behavior
 
-## Design Principles
+The Click group in `src/simpcode/cli/main.py` is invoked with `invoke_without_command=True`.
 
-### 1. Wiki-First Semantic Navigation
+Implication:
 
-**Problem**: Traditional tools grep files randomly (semantic amnesia)
+ - running `simp` with no subcommand launches TUI directly,
+ - this is the primary user path,
+ - interactive chat is available via the TUI; check available subcommands with `simp --help` or inspect `src/simpcode/cli/` for current handlers.
 
-**Solution**: Maintain a semantic knowledge graph (the Wiki) with hash-validated sources
+### Root options
 
-**Implementation**:
-- Every Wiki page references actual code via SHA-256 hash
-- Before using a page, verify hash matches current code
-- If hash differs: exclude page (content is stale)
-- This prevents using outdated information about your codebase
+The root command supports:
 
-**Benefit**: LLM always works with fresh, accurate understanding
+- `--provider`
+- `--model`
+- `--session`
+- `--new`
 
-### 2. Tiered Context Assembly
+These values are passed to `SimpShell` and can override loaded session defaults.
 
-**Problem**: Context windows are expensive and limited
+## 2. TUI Command Router Details
 
-**Solution**: Assemble context in tiers (mandatory > semantic > targeted)
+`SimpShell._route_command` maps slash commands to handlers.
 
-```
-Tier 1: MANDATORY (never drop)
-├─ SPEC.md (user requirements)
-├─ SIMP.md (current system state)
-└─ Wiki index (strategic map)
+Implemented handlers:
 
-Tier 2: SEMANTIC (drop if budget exceeded)
-├─ Module responsibility pages
-├─ Architectural decision pages
-└─ Risk and pattern pages
+- ask, do, sync, status, recover, init, wiki, config, sessions, simp, clear, help
 
-Tier 3: TARGETED (drop first)
-├─ Specific code ranges
-└─ Function implementations
-```
+Chat fallback:
 
-**Token Budget Enforcement**:
-- Default: 100k tokens
-- Fill Tier 1 (mandatory)
-- Fill Tier 2 with remaining budget
-- Fill Tier 3 with what's left
-- If Tier 2 doesn't fit: drop with warning
-- Tier 1 is NEVER dropped
+- non-slash input routes to `_handle_chat`, which performs context scan and LLM interactive reply with session history persistence.
 
-**Benefit**: Always has architectural context, scales to large projects
+## 3. Onboarding and Initialization Path
 
-### 3. Read-Before-Write Execution
+Onboarding gate in `needs_onboarding` checks:
 
-**Problem**: LLM could make wrong assumptions about current state
+- `SIMP.md` existence
+- `.simp/wiki/index.md` existence
 
-**Solution**: Every step reads affected files before modifying
+If missing, `_ensure_onboarded` chooses one of two paths:
 
-**Implementation**:
-```python
-# For each plan step:
-1. Read file(s) mentioned in target
-2. LLM reasons about current state
-3. LLM generates modification
-4. Apply modification
-5. Verify with test or lint
-6. Continue until verified
-```
+1. skeleton initialization:
+   - static templates and baseline wiki structure
+2. legacy synthesis import:
+   - project analyzer metadata
+   - synthesized docs
+   - wiki bootstrap generation
+   - fallback to skeleton on synthesis failure
 
-**Benefit**: Catches state drift, prevents cascading failures
+## 4. Context Assembly Pipeline (`ScanScene`)
 
-### 4. High-Integrity Tool Harness
+### Mandatory context
 
-**Problem**: Need to prevent accidental writes outside scope
+- `SIMP.md`, `SPEC.md` when present
+- wiki pages `index` and `invariants`
+- selected skill documents from global/project skill directories
 
-**Solution**: Every file operation goes through gated harness
+### Auto-healing behavior
 
-**Implementation**:
-```python
-ToolHarness(root, allowed_files)
-  ├─ Path normalization (prevent ../../../ tricks)
-  ├─ Scope validation (is file in allowed_files?)
-  ├─ Exclusion check (is file in .gitignore or .simpignore?)
-  └─ Permission enforcement (read-only vs read-write)
-```
+If mandatory wiki page is stale, SimpCode attempts regeneration before context inclusion.
 
-**Benefit**: Cannot modify files outside plan scope
+### Navigation passes
 
-### 5. Continuous Learning
+`WikiNavigator` can request additional pages over multiple passes.
 
-**Problem**: Each task is independent; system doesn't grow
+For each page loaded:
 
-**Solution**: Extract patterns and risks from each execution
+- stale pages are healed,
+- still-stale pages are excluded,
+- semantic content is added,
+- file range snippets are added to targeted tier.
 
-**Implementation**:
-```python
-GetBetter(root, llm).run(task, execution_trace)
-  ├─ Analyze: What patterns emerged?
-  ├─ Analyze: What risks occurred?
-  ├─ Analyze: What new invariants exist?
-  └─ Update: Wiki with findings
-```
+### Budget enforcement
 
-**Benefit**: System becomes smarter with each task
+`ContextBudgeter` keeps mandatory tier and drops optional items as needed with warnings.
 
----
+## 5. Planner Internals (`PlanGenerator`)
 
-## Component Interactions
+Planner interaction uses structured output with `ArchitectResponse`.
 
-### 1. Initialization Flow (simp init)
+Possible outcomes:
 
-```
-User runs: simp init
-│
-├─→ ProjectAnalyzer(root)
-│   └─ collect_metadata()
-│       ├─ Walk filesystem → file_tree
-│       ├─ Extract manifests (pyproject.toml, package.json, etc.)
-│       └─ Extract entry point samples (first 2000 chars of main.py, etc.)
-│
-├─→ IntelligenceSynthesizer(llm)
-│   └─ synthesize(metadata)
-│       └─ LLM reads: file_tree + manifests + samples
-│           └─ Generates: SIMP.md + SPEC.md
-│
-├─→ DocumentGenerator(root)
-│   └─ write_docs(simp_md, spec_md)
-│       └─ Writes: SIMP.md and SPEC.md to disk
-│
-└─→ WikiBootstrap(llm, root)
-    └─ run(metadata)
-        ├─ LLM reads: file_tree + manifests + samples
-        └─ Generates: Initial Wiki pages (modules, symbols, decisions)
-            └─ Writes to: .simp/wiki/
+- direct plan
+- context request (`pages_to_load`) for another planning turn
 
-Result: Project is initialized with understanding
-```
+Planner performs up to 3 turns before forcing final plan generation.
 
-**Key**: Each phase builds on previous outputs
+Important detail:
 
-### 2. Task Execution Flow (User enters task)
+- if `SPEC.md` exists, planner prepends it to context.
 
-```
-User: "Add comprehensive logging to auth module"
-│
-├─→ ScanScene(root, llm).run(task)
-│   ├─ Load mandatory: SIMP.md, index.md (never dropped). Include `SPEC.md` only if present.
-│   ├─ WikiNavigator(llm).navigate(task, index)
-│   │   └─ LLM reads: Task + index
-│   │       └─ Decides: Which semantic pages needed?
-│   ├─ Load selected pages (multi-pass if needed)
-│   ├─ For each page, extract: targeted code ranges
-│   └─ ContextBudgeter: assemble within token limit
-│       └─ Returns: ~80-120k tokens of context
-│
-├─→ PlanGenerator(llm, scanner).generate(task, context)
-│   ├─ Prepend SPEC.md (user requirements)
-│   ├─ Multi-turn dialogue:
-│   │   ├─ Turn 1: "Given context, generate plan OR request more context?"
-│   │   ├─ If requesting: Load additional pages, retry
-│   │   └─ Turn N: Generate final plan
-│   └─ Returns: Plan with atomic steps
-│
-├─→ TakeAction(root, llm).execute(plan, context, scanner, task)
-│   └─ For each step:
-│       ├─ Refresh context: ScanScene.run(task) again
-│       ├─ ReAct loop (repeat until step complete):
-│       │   ├─ LLM reasoning: "What's current state? Next action?"
-│       │   ├─ LLM decision: Call tool (read, write, patch, shell)
-│       │   ├─ Tool execution via ToolHarness:
-│       │   │   ├─ Validate scope
-│       │   │   ├─ Execute operation
-│       │   │   └─ Update Wiki hashes
-│       │   ├─ Trace logging
-│       │   └─ LLM verification: "Is this step complete?"
-│       └─ Move to next step
-│
-└─→ GetBetter(root, llm).run(task, execution_trace)
-    ├─ Analyze: What patterns emerged?
-    ├─ Analyze: What risks occurred?
-    ├─ Analyze: What new invariants exist?
-    └─ Update Wiki: changes.md + new cognitive pages
+## 6. Executor Internals (`TakeAction`)
 
-Result: Task completed, Wiki evolved, ready for next task
-```
+### Allowed write scope
 
-**Key**: Each phase gets fresh context, no assumptions
+Allowed files are derived from plan step targets that look like path/file targets.
 
-### 3. Context Assembly Details (ScanScene)
+### Loop model
 
-```
-ScanScene.run(task)
-│
-├─ Step 1: Load Mandatory Items
-│   ├─ SPEC.md (from disk)
-│   ├─ SIMP.md (from disk)
-│   ├─ index.md (from wiki)
-│   └─ Selected skills (from .simp/skills/)
-│
-├─ Step 2: Strategic Navigation (Multi-pass)
-│   Pass 1:
-│   ├─ WikiNavigator.navigate(task, index)
-│   ├─ LLM decides: Which semantic pages needed?
-│   │   └─ "To add logging to auth, I need: patterns/logging, modules/auth, decisions/error_handling"
-│   ├─ Load selected pages from wiki
-│   └─ Check staleness: Hash matches? Include : Exclude + warn
-│
-│   Pass 2 (if needed):
-│   ├─ Analyze: Do loaded pages reference other pages?
-│   ├─ Load supplemental pages
-│   └─ Repeat until no new references
-│
-├─ Step 3: Extract Targeted Code Ranges
-│   For each loaded Wiki page:
-│   ├─ Extract source references (file, lines, hash)
-│   ├─ Read that range from actual file
-│   └─ Add to context with label "CODE: src/auth.py (50-100)"
-│
-└─ Step 4: Assemble with Budget Enforcement
-    ├─ ContextBudgeter(total_budget=100k)
-    ├─ Add all mandatory items (usually ~15k tokens)
-    ├─ Add semantic items until budget runs low (~35k)
-    ├─ Add targeted code ranges to fill remainder (~50k)
-    └─ If budget exceeded: drop optional items with warning
+For each step, model emits a `ToolCall` containing:
 
-Result: Assembled context string ready for LLM
-```
+- tool name
+- arguments
+- thought
+- `complete` boolean
 
-**Key**: Multi-pass navigation catches dependencies
+### Safety and reliability controls
 
-### 4. Planning with Context Request
+- loop ceiling per step,
+- failure counting per step,
+- repeated same tool-call tripwire,
+- explicit blocking on plan/security violations.
 
-```
-PlanGenerator.generate(task, context)
-│
-├─ Max 3 turns:
-│
-│   Turn 1:
-│   ├─ Prompt: "Given context + task, generate plan OR request more context"
-│   ├─ Response: ArchitectResponse (is_plan=true/false)
-│   ├─ If is_plan=true: Return plan ✓
-│   └─ If is_plan=false: Extract request.pages_to_load
-│   │
-│   ├─ Requested pages not in context?
-│   ├─ Load them from wiki
-│   └─ Add to context
-│   │
-│   Turn 2: Retry with expanded context
-│   │
-│   Turn 3: Final attempt (force plan with current context)
-│
-└─ Return: Structured Plan with steps
-   ├─ step.id: Step number
-   ├─ step.target: Which file
-   ├─ step.action: What to do
-   ├─ step.rationale: Why it matters
-   └─ step.verification: How to verify
+### Verification policy
 
-Plan structure enables verification and tracing
-```
+After write/patch:
 
-**Key**: Multi-turn dialogue ensures sufficient context
+1. `flake8 <file>`
+2. step-specific verification command if defined
 
-### 5. Execution with Verification
+Failure in either marks step turn as failed and pushes corrective behavior.
 
-```
-TakeAction.execute(plan, context)
-│
-For each plan step:
-│
-├─ Context Refresh (Production Readiness Fix #1)
-│   └─ Call ScanScene.run(task) again
-│       └─ Ensures: Latest code state loaded
-│
-├─ ReAct Loop (repeat until step.verified):
-│   ├─ LLM Reasoning:
-│   │   ├─ Analyze: current_context
-│   │   ├─ Analyze: execution_history
-│   │   ├─ Decide: Next action (tool call)
-│   │   └─ Output: ToolCall(tool, args, thought, complete)
-│   │
-│   ├─ Tool Execution via ToolHarness:
-│   │   ├─ read_file(path)
-│   │   │   ├─ Check: Is path excluded? → Block
-│   │   │   ├─ Read from disk
-│   │   │   └─ Return content
-│   │   │
-│   │   ├─ write_file(path, content)
-│   │   │   ├─ Check: Is path in scope? → Block
-│   │   │   ├─ Write to disk
-│   │   │   ├─ Update Wiki hashes (Production Readiness Fix #4)
-│   │   │   └─ Return success
-│   │   │
-│   │   ├─ patch_file(path, old, new)
-│   │   │   ├─ Whitespace-tolerant matching (Fix #2)
-│   │   │   ├─ Apply patch
-│   │   │   ├─ Verify file is valid
-│   │   │   └─ Update Wiki hashes
-│   │   │
-│   │   └─ run_shell(command)
-│   │       ├─ Unrestricted shell (Fix #3)
-│   │       └─ Run in project root
-│   │
-│   ├─ Trace Logging:
-│   │   └─ Record: thought, tool, args, result
-│   │
-│   └─ Continue loop until: tool_call.complete = true
-│
-└─ Move to next step
+### Wiki coupling on mutation
 
-Result: Modified files + complete execution trace
+After file write/patch, executor attempts wiki sync for impacted pages using O(1) registry lookup and regeneration path.
+
+After plan execution with modified files:
+
+- append `changes` page log entry
+- update index hotspots with modified paths.
+
+## 7. Tool Harness Security Model
+
+`ToolHarness` enforces:
+
+- normalized absolute paths
+- root-bound traversal checks
+- exclusion filter rules
+- plan-approved write scope
+
+`run_shell` is intentionally conservative:
+
+- forbidden shell control tokens rejected
+- command allowlist enforced
+- subprocess executed with `shell=False`
+
+## 8. Wiki Engine Deep Details
+
+### Data model
+
+Each page has metadata and content.
+
+Metadata includes source references with hashes and optional line spans.
+
+`_previous_sources` is a private, non-serialized field used to optimize registry cleanup.
+
+### Registry behavior
+
+Registry file: `.simp/wiki/registry.json`
+
+- key: source file path
+- value: list of wiki page IDs
+
+`get_pages_for_file`:
+
+- dictionary retrieval (`registry.get(file_path, [])`), O(1)
+
+`save_page`:
+
+- removes old mappings using tracked previous sources (O(s))
+- fallback O(m) scan only for edge case (loaded page + clearing sources)
+- writes new mappings and updates cached registry state
+
+### Page listing cache
+
+`get_all_pages` uses wiki directory mtime cache.
+
+- unchanged mtime + non-empty cache -> O(1) return
+- changed mtime -> recursive scan and parse
+
+### Staleness checks
+
+For each source reference:
+
+- if file missing -> stale (`DELETED`)
+- if hash mismatch -> stale with current hash
+
+## 9. Session, Logs, and Tokens
+
+Session manager stores serialized state in `.simp/sessions`.
+
+Execution logger writes JSONL traces per session in `.simp/logs`.
+
+Token logger appends usage estimate entries to `.simp/tokens.log`.
+
+## 10. Provider Resolution and Backoff
+
+`LLMClient` resolution order:
+
+1. explicit runtime override
+2. persisted config provider entry
+3. environment fallback
+
+Retry/backoff wrapper retries retryable API/server conditions with exponential delay.
+
+Structured output includes one extra corrective attempt for schema compliance failures when appropriate.
+
+## 11. Index and Knowledge Topology
+
+`IndexManager` maintains `index.md` under a token budget.
+
+Pruning order when oversized:
+
+1. hotspots
+2. decisions
+3. modules
+
+Hotspot updates keep newest entries first and cap list length.
+
+## 12. Skills System
+
+Skill locations:
+
+- global: `~/.simpcode/skills/*.md`
+- project: `.simp/skills/*.md`
+
+Project skills override global by matching skill ID.
+
+Skill selector uses structured LLM output to choose task-relevant skills for context assembly.
+
+## 13. Operational Guarantees and Non-Guarantees
+
+### Intended guarantees
+
+- explicit plan approval path,
+- scoped writes and safer execution primitives,
+- persistent artifacts for inspectability,
+- wiki/source consistency mechanisms.
+
+### Non-guarantees
+
+- not all command stubs are feature-complete (`/wiki search` placeholder),
+- LLM quality still depends on provider/model quality,
+- complex shell workflows are intentionally constrained.
+
+## 14. Practical Implication for Teams
+
+SimpCode is strongest when treated as:
+
+- a controlled assistant for scoped implementation work,
+- a local knowledge and audit artifact generator,
+- a repeatable execution framework with inspectable traces.
+
+It is weakest when asked to behave like unconstrained autonomous shell automation.
+
+## 15. System Diagram (High-level)
+
+The following Mermaid diagram summarizes the primary runtime components and their interactions. It is intended to help engineers quickly map code locations to architectural responsibilities.
+
+```mermaid
+flowchart LR
+   CLI["CLI / TUI (simp)"] -->|invokes| Shell[SimpShell]
+   Shell -->|routes| Planner[PlanGenerator]
+   Planner -->|produces plan| Executor[TakeAction / Executor]
+   Executor -->|uses| ToolHarness[ToolHarness]
+   Executor -->|updates| WikiEngine[Wiki Engine]
+   WikiEngine -->|persists| Registry[.simp/wiki/registry.json]
+   WikiEngine -->|reads/writes| WikiFS[.simp/wiki/*.md]
+   Executor -->|uses| LLM[LLMClient]
+   LLM -->|provider| ExternalAPI[Provider (OpenAI/Anthropic/...)]
+   Executor -->|logs| ExecLogs[.simp/logs/*.jsonl]
+   Shell -->|stores| Sessions[.simp/sessions]
+   IndexManager[IndexManager] -.->|reads| WikiFS
+   IndexManager -.->|writes| IndexFile[index.md]
+   ToolHarness -->|executes sandboxed| Subprocess[Local subprocess]
+   subgraph Code
+      Planner
+      Executor
+      WikiEngine
+      ToolHarness
+      IndexManager
+   end
 ```
 
-**Key**: Every step reads current state, verifies before moving on
-
-### 6. Learning Phase (GetBetter)
-
-```
-GetBetter.run(task, execution_trace)
-│
-├─ Analyze execution:
-│   ├─ What did the LLM do?
-│   ├─ What patterns did it use repeatedly?
-│   ├─ What went wrong (retries)?
-│   └─ What was learned about the codebase?
-│
-├─ Extract three types of knowledge:
-│   ├─ new_patterns: "We use dependency injection for services"
-│   ├─ new_risks: "Token validation must happen first to avoid side effects"
-│   └─ new_invariants: "All endpoints must have error handling"
-│
-├─ Generate change log entry:
-│   └─ Semantic summary of architectural impact
-│
-└─ Update Wiki:
-    ├─ Append to changes.md
-    ├─ Create new cognitive pages if needed
-    └─ Update patterns.md
-        └─ Next task can use learned patterns
-
-Result: Wiki becomes smarter, ready for next task
-```
-
-**Key**: Learning is automatic, based on execution traces
-
----
-
-## Data Structures
-
-### ProjectMetadata
-
-```python
-class ProjectMetadata(BaseModel):
-    name: str                          # Project name
-    root: str                          # Root directory
-    file_tree: List[str]               # All files (hierarchical if large)
-    manifests: Dict[str, str]          # Manifest contents
-    entry_point_samples: Dict[str, str] # Entry point snippets
-```
-
-### Plan
-
-```python
-class Plan(BaseModel):
-    task_id: str                   # Unique task ID
-    rationale: str                 # Overall architectural reasoning
-    steps: List[PlanStep]          # Atomic execution steps
-    scope_exclusions: List[str]    # Files NOT to modify
-    risk_level: str                # "low", "medium", "high"
-
-class PlanStep(BaseModel):
-    id: int                        # Step sequence
-    target: str                    # File to modify
-    action: str                    # What to do
-    rationale: str                 # Why it matters
-    verification: str              # How to verify completion
-```
-
-### WikiPage
-
-```python
-class WikiPageMetadata(BaseModel):
-    id: str                        # Page identifier
-    type: str                      # "module", "symbol", "decision", "cognitive"
-    last_updated: float            # Timestamp
-    sources: List[SourceReference] # Hash-validated code references
-
-class SourceReference(BaseModel):
-    file_path: str                 # Path relative to project root
-    start_line: Optional[int]      # Line number or None for whole file
-    end_line: Optional[int]        # Line number or None for whole file
-    hash: str                      # SHA-256 hash for integrity
-
-class WikiPage(BaseModel):
-    metadata: WikiPageMetadata
-    content: str                   # Markdown content
-```
-
-### ContextItem
-
-```python
-class ContextItem(BaseModel):
-    id: str                        # Page or code identifier
-    content: str                   # Content to include
-    priority: int                  # Tier: 0=mandatory, 1=semantic, 2+=targeted
-```
-
----
-
-## Error Recovery
-
-### Planning Failures
-
-**Scenario**: PlanGenerator can't generate plan after 3 turns
-
-**Recovery**:
-1. Log error with partial context
-2. Ask user to clarify task
-3. Retry with expanded SPEC.md or breaking into smaller tasks
-
-### Execution Failures
-
-**Scenario**: ToolHarness blocks a file write (scope violation)
-
-**Recovery**:
-1. Halt execution
-2. Log which file was attempted
-3. Suggest: "File not in plan scope. Mention it in task description?"
-
-**Scenario**: LLM verification never completes (infinite loop)
-
-**Recovery**:
-1. After 30 ReAct turns per step, mark as "incomplete"
-2. Log partial progress
-3. Ask user: "Manual verification needed?"
-
-### Wiki Staleness
-
-**Scenario**: Wiki page is stale (hash mismatch)
-
-**Recovery**:
-1. Exclude stale page from context
-2. Warn user: "[Scan] Wiki page X is stale"
-3. Next task focused on that module will refresh it
-
----
-
-## Performance Characteristics
-
-### Token Usage (Per Task)
-
-Typical task execution:
-
-```
-Context Assembly:    20-30k tokens (reading, navigation)
-Planning:           10-15k tokens (generating plan)
-Execution:          40-60k tokens (multi-turn reasoning + verification)
-Learning:            5-10k tokens (analysis)
-───────────────────
-Total per task:     75-115k tokens
-```
-
-**Optimization**: Use cheaper LLM for planning (Groq), quality for execution (Anthropic)
-
-### Time Complexity
-
-- **Initialization**: O(n) where n = number of project files
-  - Small project (<100 files): ~2 seconds
-  - Medium project (<1000 files): ~5-10 seconds
-  - Large project (>1000 files): hierarchical compression used
-
-- **Task Execution**: O(s × r) where s = plan steps, r = ReAct rounds per step
-  - Simple task (1 step, 2 rounds): ~30 seconds
-  - Medium task (3 steps, 3-4 rounds each): ~90 seconds
-  - Complex task (5+ steps, 5+ rounds each): ~200+ seconds
-
-### Memory Usage
-
-- **Loaded Wiki**: O(p × c) where p = pages, c = avg page content
-  - Small project: ~50MB
-  - Medium project: ~200MB
-  - Large project: ~1GB (streaming recommended)
-
----
-
-## Safety Guarantees
-
-### Scope Enforcement
-
-Every ToolHarness operation validates:
-
-```python
-def _check_scope(file_path: str):
-    # 1. Normalize path (prevent ../../ tricks)
-    full_path = (self.root / file_path).resolve()
-    
-    # 2. Check against allowed list
-    for allowed in self.allowed_paths:
-        if full_path == allowed or full_path.is_relative_to(allowed):
-            return  # OK
-    
-    # 3. If not allowed: BLOCK
-    raise PermissionError(f"Out of scope: {file_path}")
-```
-
-**Guarantee**: Cannot write outside plan scope
-
-### Semantic Integrity
-
-Every Wiki page reference is validated:
-
-```python
-def check_staleness(page: WikiPage) -> List[Tuple[SourceReference, str]]:
-    stale = []
-    for source in page.metadata.sources:
-        actual_hash = calculate_range_hash(source.file_path)
-        if actual_hash != source.hash:
-            stale.append((source, actual_hash))
-    return stale
-```
-
-**Guarantee**: Wiki pages are excluded if sources changed
-
-### Context Budget Enforcement
-
-Every context assembly respects budget:
-
-```python
-def assemble(mandatory, semantic, targeted) -> str:
-    assembled = []
-    current_tokens = 0
-    
-    # Add all mandatory (never drop)
-    for item in mandatory:
-        tokens = count_tokens(item.content)
-        assembled.append(item.content)
-        current_tokens += tokens
-    
-    # Add optional until budget
-    for item in semantic + targeted:
-        tokens = count_tokens(item.content)
-        if current_tokens + tokens <= budget:
-            assembled.append(item.content)
-            current_tokens += tokens
-        else:
-            assembled.append(f"[DROPPED: {item.id}]")
-    
-    return "".join(assembled)
-```
-
-**Guarantee**: Never exceeds token budget
-
----
-
-## Extension Points
-
-### 1. Custom Roles
-
-Create new system prompts in `src/simpcode/core/prompts/`:
-
-```markdown
-# my_custom_role.md
-# IDENTITY
-ROLE: My Custom Role
-...
-
-# my_custom_role_task.md
-# PROMPT TEMPLATE
-Given context: {current_context}
-...
-```
-
-Register in `__init__.py`:
-```python
-registry.register("my_custom_role", "...")
-```
-
-### 2. Custom Tools
-
-Extend ToolHarness:
-
-```python
-class CustomToolHarness(ToolHarness):
-    def my_custom_tool(self, arg):
-        # Implement custom operation
-        # Must validate scope
-        # Must log to trace
-        pass
-```
-
-### 3. Custom LLM Providers
-
-Implement `LLMProvider` base class:
-
-```python
-class CustomProvider(LLMProvider):
-    def complete(self, prompt, system) -> str:
-        # Implement API call
-        pass
-    
-    def structured_output(self, prompt, schema, system):
-        # Implement structured output
-        pass
-```
-
----
-
-## Known Limitations & Future Work
-
-### Current Limitations
-
-1. **Python-centric**: Works best with Python projects
-2. **Single-task workflow**: Queues multiple tasks (batch execution coming)
-3. **Manual SPEC.md**: Requires user to write/maintain
-4. **Context truncation**: Very large repos may exceed even compressed form
-5. **No dry-run**: Can't preview changes before execution
-
-### Roadmap
-
-1. **Multi-language support**: Golang, Rust, JavaScript, TypeScript
-2. **Batch task execution**: Queue and process multiple tasks
-3. **Dry-run mode**: Preview changes before execution
-4. **Web UI**: Visual dashboard for Wiki, execution history
-5. **Custom backends**: Deploy with private LLM infrastructure
-6. **Team collaboration**: Shared Wiki, role-based access
-7. **Git integration**: Automatic commits with semantic messages
-8. **Performance profiling**: Analyze slow tasks, optimize
-
----
-
-## Summary
-
-SimpCode's architecture achieves high-integrity agentic engineering through:
-
-1. **Wiki-First**: Semantic knowledge guides all decisions
-2. **Tiered Context**: Efficient use of limited token budgets
-3. **Read-Before-Write**: Continuous state verification
-4. **Safe Execution**: Strict scope and permission enforcement
-5. **Continuous Learning**: System improves after each task
-
-This design enables **safe, verifiable, improving software engineering at scale**.
-
----
-
-**See Also**: 
-- [Comprehensive User Guide](COMPREHENSIVE_GUIDE.md)
-- [Troubleshooting Guide](TROUBLESHOOTING.md)
-- [Example Workflows](EXAMPLES.md)
+Notes:
+
+- `SimpShell` is the user-facing router implemented in `src/simpcode/cli/shell.py`.
+- `PlanGenerator` is implemented in `src/simpcode/core/planner.py` and uses structured LLM outputs.
+- `Executor` (TakeAction) is in `src/simpcode/core/executor.py` and orchestrates tool calls and verification.
+- `WikiEngine` is in `src/simpcode/wiki/engine.py`; the registry is an inverted index mapping source files to wiki pages for O(1) lookups.
+- `ToolHarness` enforces path scoping and an allowlist for shell commands in `src/simpcode/harness/tools.py`.
+
+For a deeper walk-through, see the sections above that map behavior to file locations.

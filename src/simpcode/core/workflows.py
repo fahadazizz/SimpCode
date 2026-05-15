@@ -139,6 +139,8 @@ class SimpWorkflows:
         provider: Optional[str] = None,
         model: Optional[str] = None,
         approval_prompt: Optional[Callable[[str], str]] = None,
+        session_manager: Optional[SessionManager] = None,
+        session_state: Optional[SessionState] = None,
     ) -> Plan:
         root = get_project_root()
         self._ensure_onboarded(root, provider=provider, model=model)
@@ -151,12 +153,24 @@ class SimpWorkflows:
         executor = TakeAction(root, llm, session_id=session_id)
         evolver = GetBetter(root, llm)
 
+        if session_state is not None:
+            session_state.tasks_performed.append(task)
+            session_state.status = "running"
+            if session_manager is not None:
+                session_manager.save_session(session_state)
+
         with self.console.status("[bold blue]Scanning impact surface..."):
             context = scanner.run(task)
 
         with self.console.status("[bold blue]Thinking Through (Planning)..."):
             plan = planner.generate(task, context)
             plan.task_id = session_id
+
+        if session_state is not None:
+            session_state.plans_produced.append(plan.task_id)
+            session_state.status = "planned"
+            if session_manager is not None:
+                session_manager.save_session(session_state)
 
         plan_path = get_plans_dir() / f"plan_{session_id}.json"
         plan_path.write_text(plan.model_dump_json(indent=2))
@@ -172,7 +186,18 @@ class SimpWorkflows:
             self.console.print(
                 "\n[bold green]Plan Approved. Transitioning to TAKE ACTION.[/bold green]"
             )
-            execution_trace = executor.execute(plan, context)
+            try:
+                execution_trace = executor.execute(plan, context)
+            except KeyboardInterrupt:
+                if session_state is not None:
+                    session_state.ended_at = time.time()
+                    session_state.status = "interrupted"
+                    session_state.errors_encountered.append("KeyboardInterrupt during execution")
+                    session_state.final_summary = f"Interrupted while executing task: {task}"
+                    if session_manager is not None:
+                        session_manager.save_session(session_state)
+                self.console.print("\n[yellow]Interrupted during execution. Session state saved.[/yellow]")
+                return plan
 
             with self.console.status("[bold blue]Getting Better (Reflecting)..."):
                 proposals = evolver.run(task, execution_trace)
@@ -200,8 +225,20 @@ class SimpWorkflows:
                             )
 
             self.console.print("\n[bold green]✓ Task lifecycle complete.[/bold green]")
+            if session_state is not None:
+                session_state.ended_at = time.time()
+                session_state.status = "completed"
+                session_state.final_summary = f"Completed task: {task}"
+                if session_manager is not None:
+                    session_manager.save_session(session_state)
         else:
             self.console.print("\n[red]Task Aborted by User.[/red]")
+            if session_state is not None:
+                session_state.ended_at = time.time()
+                session_state.status = "aborted"
+                session_state.final_summary = f"User aborted task: {task}"
+                if session_manager is not None:
+                    session_manager.save_session(session_state)
 
         return plan
 
@@ -224,25 +261,9 @@ class SimpWorkflows:
                 )
 
                 with self.console.status(f"Compiling {page.metadata.id}..."):
-                    code_context = ""
-                    for source, current_hash in stale_sources:
-                        full_path = root / source.file_path
-                        if full_path.exists():
-                            code_context += (
-                                f"--- {source.file_path} ---\n"
-                                f"{full_path.read_text()[:5000]}\n"
-                            )
-                        source.hash = current_hash
-
                     instruction = registry.load("wiki_maintainer")
-                    prompt = (
-                        f"OLD CONTENT:\n{page.content}\n\n"
-                        f"Current Code:\n{code_context}\n\nUpdate page."
-                    )
-                    page.content = llm.chat([{"role": "user", "content": prompt}], instruction)
-                    page.metadata.last_updated = time.time()
-                    wiki.save_page(page)
-                    self.console.print(f"  [green]✓[/green] Synchronized {page.metadata.id}")
+                    if wiki.regenerate_page_from_code(page, llm, instruction):
+                        self.console.print(f"  [green]✓[/green] Synchronized {page.metadata.id}")
 
         if stale_count == 0:
             self.console.print("[green]Wiki is consistent with codebase.[/green]")
@@ -397,11 +418,23 @@ class SimpWorkflows:
             messages = [{"role": message.role, "content": message.content} for message in state.history]
             full_user_input = f"LOCAL CONTEXT:\n{context}\n\nUSER: {user_input}"
             chat_payload = messages + [{"role": "user", "content": full_user_input}]
+
+        response_parts: List[str] = []
+        stream_method = getattr(llm, "stream_chat", None)
+        if callable(stream_method):
+            self.console.print("[bold green]SimpCode:[/bold green] ", end="")
+            for chunk in stream_method(chat_payload, instruction):
+                if not chunk:
+                    continue
+                response_parts.append(chunk)
+                self.console.print(chunk, end="")
+            self.console.print()
+            response = "".join(response_parts)
+        else:
             response = llm.chat(chat_payload, instruction)
+            self.console.print(Panel(Markdown(response), title="SimpCode", border_style="green"))
 
         state.history.append(SessionMessage(role="user", content=user_input))
         state.history.append(SessionMessage(role="assistant", content=response))
         manager.save_session(state)
-
-        self.console.print(Panel(Markdown(response), title="SimpCode", border_style="green"))
         return response
