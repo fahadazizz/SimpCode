@@ -2,33 +2,130 @@
 
 This guide is organized by symptoms you are likely to encounter in daily usage.
 
-## 1. SimpCode Does Not Start
+## Quick troubleshooting checklist (first 60 seconds)
 
-### Symptom
-
-Running `simp` fails immediately.
-
-### Checklist
-
-1. Ensure your virtual environment is active.
-2. Ensure package is installed in editable mode:
+1. Is `simp` on PATH or venv activated?
 
 ```bash
-pip install -e .
+which simp || echo "activate .venv: source .venv/bin/activate"
 ```
 
-3. Verify Python version is compatible (`>=3.12`).
-4. Run:
+2. Are you using the project virtualenv? If not, activate with:
+
+```bash
+source .venv/bin/activate
+```
+
+3. Run the smoke command to confirm basic behavior:
 
 ```bash
 simp --help
 ```
 
-If this still fails, reinstall dependencies:
+If the above fails, check Python version and re-run the manual install steps from Getting Started.
+
+## Common failure scenarios and how to fix them
+
+1) Provider authentication or API errors
+
+Symptom:
+- API auth errors, 401/403, or empty LLM responses.
+
+Quick fixes:
+
+```text
+simp setup
+```
+
+Verify keys and base URLs in `~/.simpcode/config.json` or `<project>/.simp/config.json`.
+
+2) Onboarding did not create expected artifacts
+
+Symptom:
+- `SIMP.md` or `.simp/wiki/index.md` missing; `/ask` returns poor context.
+
+Fix:
+
+```text
+simp init
+```
+
+If onboarding synthesis fails, run `simp init` again and inspect `.simp/logs/` for errors.
+
+3) `/do` fails during verification (lint/tests)
+
+Symptom:
+- Executor reports verification failure after a write/patch.
+
+Resolution steps:
+
+1. Open the execution trace in `.simp/logs/exec_<session>.jsonl` and find the failing step.
+2. Reproduce the verification command locally (e.g., `pytest tests/... -q`).
+3. Fix the code or verification command in a new `/do --dry-run` and re-run.
+
+4) Stale wiki pages or missing context
+
+Symptom:
+- `/status` reports stale pages; planner lacks context for a task.
+
+Fix:
+
+```text
+/sync
+```
+
+If regeneration fails, inspect `.simp/wiki/` for page content and `.simp/wiki/registry.json` for mappings.
+
+5) `simp` command not found after installer
+
+Cause:
+- `~/.local/bin` not in PATH or symlink missing.
+
+Fix:
 
 ```bash
-pip install -e . --upgrade
+mkdir -p ~/.local/bin
+ln -sf ~/.local/share/simpcode/.venv/bin/simp ~/.local/bin/simp
+export PATH="$PATH:${HOME}/.local/bin"
 ```
+
+6) Configuration drift between global and project config
+
+Symptom:
+- unexpected provider/model settings when switching projects.
+
+Check order of precedence and where config is written:
+
+1. `~/.simpcode/config.json` (global)
+2. `<project>/.simp/config.json` (project-local)
+
+If behavior is unexpected, open both files and reconcile settings.
+
+7) Security / permission errors when writing files
+
+Symptom:
+- executor refuses to write or permission denied.
+
+Fixes:
+
+- Ensure the process user has write access to the target files.
+- If `ToolHarness` denies a write due to scope, review the plan scope and re-run `/do --dry-run` with explicit allowed targets.
+
+8) Debugging CI flakiness when running plans in CI
+
+Advice:
+
+- use manual venv activation in CI and `pip install -e .[dev]` before running tests.
+- pin provider endpoints and use mock providers for deterministic tests.
+
+When to open an issue
+
+- If you find behavior in the CLI/TUI that doesn't match documentation and you cannot reconcile it with the above checks, please open an issue including:
+
+1. repo root commit hash
+2. steps to reproduce
+3. relevant `.simp/logs/` traces and config files (redact secrets)
+4. expected vs actual behavior
 
 ## 2. Provider Errors or Empty LLM Responses
 

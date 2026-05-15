@@ -24,16 +24,55 @@ Example template:
 
 ## 3. Examples of Strong Task Requests
 
-- "Add request payload validation in `src/api/handlers.py`, add tests in `tests/test_handlers.py`, do not change auth middleware, verify with `pytest tests/test_handlers.py -q`."
-- "Refactor `src/cache/service.py` to isolate eviction policy, update `tests/test_cache_service.py`, keep public API unchanged, verify with `pytest tests/test_cache_service.py -q`."
 
-## 4. Examples of Weak Task Requests
+# Writing Rules and Prompt Guidance
 
-- "Improve backend quality."
-- "Make this project cleaner."
-- "Fix auth completely."
+Good task descriptions make planning predictable and reviewable. When writing requests for `/do`, follow these rules:
 
-Weak prompts lack file scope and verification expectations.
+1. Be specific about targets
+
+- Prefer exact file paths and, when appropriate, line ranges.
+- Example: `src/api/handlers.py` not `the API layer`.
+
+2. Include verification
+
+- Always suggest a verification step: a unit test, `flake8`, or a small integration test.
+- Example: `verify with pytest tests/test_handlers.py -q`.
+
+3. Limit scope
+
+- Keep single `/do` tasks focused (1–3 files). For larger work, split into phases and use `--dry-run` for review.
+
+4. State exclusions
+
+- If there are files or areas that must not be changed, explicitly list them in the task.
+
+Good vs Bad examples
+
+Good:
+
+```text
+Add input validation to src/api/handlers.py, update tests in tests/test_handlers.py, verify with pytest tests/test_handlers.py -q
+```
+
+Bad:
+
+```text
+Fix all API bugs across the repo
+```
+
+Templates
+
+Use this template for predictable plans:
+
+```text
+/do <short goal> in <file(s)>; tests: <test command>; exclude: <paths>
+```
+
+Example:
+
+```text
+/do add token expiry check in src/auth/tokens.py; tests: pytest tests/test_tokens.py -q; exclude: migrations/
 
 ## 5. Writing Effective `/ask` Questions
 

@@ -12,6 +12,53 @@ simp setup
 simp init
 ```
 
+Installation options and notes
+
+- Quick installer (one-liner):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fahadazizz/simpcode/main/install.sh | bash
+```
+
+	- This will clone the repository to `~/.local/share/simpcode`, create a virtual environment, install the package in editable mode, and create a symlink to the `simp` CLI in `~/.local/bin`.
+	- To install from a fork or alternate repo, append the repository URL when invoking the script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fahadazizz/simpcode/main/install.sh | bash -s -- https://github.com/your-fork/simpcode.git
+```
+
+- Manual install (recommended for reproducible environments):
+
+```bash
+git clone https://github.com/fahadazizz/simpcode.git
+cd simpcode
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+- Developer / contributor install (with dev extras):
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .[dev]
+```
+
+Common post-install checks
+
+- Ensure `${HOME}/.local/bin` is in your PATH if you used the installer script:
+
+```bash
+export PATH="$PATH:${HOME}/.local/bin"
+```
+
+- If you installed manually, ensure the virtualenv is activated before running `simp`.
+
+Security note
+
+- Inspect `install.sh` before running it. The one-liner downloads and executes a script — if you need to review it first, `curl -fsSL ... -o install.sh` and then open the file.
+
 Inside TUI:
 
 ```text

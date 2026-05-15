@@ -6,7 +6,7 @@ From your description, SIMP.md is supposed to be a user-owned, root-level templa
 
 The current implementation does not follow that contract. It treats SIMP.md as generated project intelligence, refreshable onboarding output, and mutable runtime state. That is the core mismatch.
 
-## Findings
+## Finding
 
 ### 1. SIMP.md is generated and overwritten by the onboarding pipeline
 

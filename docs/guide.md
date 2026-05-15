@@ -28,56 +28,102 @@ In practice, you mostly interact through the TUI using slash commands.
 From your repository root:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
+# User Guide — Practical Workflows
+
+This User Guide shows concrete, repeatable workflows for getting value from SimpCode while minimizing risk. It is written for engineers and reviewers who will operate SimpCode day-to-day.
+
+Flows covered here:
+
+- Investigate: gather targeted context and confirm relevant files.
+- Plan: produce a reviewable plan with explicit targets and verification.
+- Execute: run approved steps with automatic verification and audit logs.
+- Recover: resume interrupted work safely.
+
+1) Investigate (non-mutating)
+--------------------------------
+
+Goal: Quickly learn where a concern lives without changing files.
+
+Command:
+
+```text
+/ask "Where is request validation performed for the payments API?"
 ```
 
-Configure your provider once:
+What to expect:
 
-```bash
-simp setup
+- A short answer summarizing likely files and design assumptions.
+- Suggested wiki pages or files to inspect (e.g., `src/payments/service.py`, `SIMP.md`).
+- Follow-ups such as `/ask` for deeper dives or `/wiki show <page-id>` to read a wiki page.
+
+2) Create and review a plan (dry-run)
+-------------------------------------
+
+Goal: Ask SimpCode to prepare an actionable plan without making changes.
+
+Command:
+
+```text
+/do add input validation to src/api/handlers.py and tests in tests/test_handlers.py --dry-run
 ```
 
-Then initialize and enter the TUI:
+What to inspect in the plan:
 
-```bash
-simp init
+- Exact target files and line ranges.
+- For each step: action, tool to use (`write_file`/`patch_file`), and the verification command.
+- Scope exclusions (files the plan will not touch).
+- Risk level and suggested reviewer.
+
+Approve when satisfied (see Execute).
+
+3) Execute an approved plan
+----------------------------
+
+Command:
+
+```text
+/do add input validation to src/api/handlers.py and tests in tests/test_handlers.py --yes
 ```
 
-You can also start the TUI directly with:
+Execution behavior:
 
-```bash
-simp
+- The executor enforces a write scope derived from the plan.
+- After each change, it runs lint and the step's verification command.
+- All actions and outputs are appended to `.simp/logs/exec_<session>.jsonl` for auditing.
+
+If a verification step fails, the executor stops the step and records the failure. You can then inspect the trace and re-run a corrected plan.
+
+4) Recovering interrupted work
+------------------------------
+
+If your session or machine crashed, resume with:
+
+```text
+/recover
 ```
 
-Notes:
+`/recover` loads the most recent persisted plan and asks for approval before continuing execution.
 
-- The installed command entrypoint is `simp`.
-- `simp` with no subcommand launches the interactive shell.
-- `simp init`, `simp ask`, and `simp do` all trigger onboarding checks automatically.
+Best practices
+--------------
 
-## 3. What Onboarding Creates
+- Always run `/status` and `/sync` before executing plans that modify many files.
+- Use `--dry-run` for medium- and high-risk tasks and require a human reviewer for approval.
+- Keep verification commands small and deterministic (unit tests, linters).
+- Inspect `.simp/plans/` and `.simp/logs/` when troubleshooting unexpected behavior.
 
-Onboarding is considered required when either of these is missing:
+Example — full safe loop
+------------------------
 
-- `SIMP.md`
-- `.simp/wiki/index.md`
-
-When required, SimpCode creates baseline artifacts:
-
-- `SIMP.md`
-- `SPEC.md`
-- `.simp/wiki/index.md`
-- `.simp/wiki/patterns.md`
-- `.simp/wiki/risks.md`
-- `.simp/wiki/invariants.md`
-- `.simp/wiki/seams.md`
-- `.simp/wiki/flows.md`
-- `.simp/wiki/changes.md`
-- directory scaffolding under `.simp/wiki/modules`, `.simp/wiki/symbols`, `.simp/wiki/decisions`
-
-Behavior details:
+```text
+/status
+/ask "Summarize critical auth paths and outstanding risks"
+/do add token expiry checks in src/auth/tokens.py and tests --dry-run
+# Review plan, then:
+/do add token expiry checks in src/auth/tokens.py and tests --yes
+/sync
+/status
+```
 
 - If the project looks like a skeleton, static templates are used.
 - If codebase metadata is rich enough, SimpCode attempts synthesized onboarding and wiki bootstrap.

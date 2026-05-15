@@ -40,6 +40,59 @@ simp setup
 simp init
 ```
 
+## Installation (Detailed)
+
+SimpCode can be installed in several ways depending on your preference and environment. Choose one of the following methods.
+
+1) Installer script (recommended for quick setup)
+
+```bash
+# Official installer (uses the bundled `install.sh` to clone and install):
+curl -fsSL https://raw.githubusercontent.com/fahadazizz/simpcode/main/install.sh | bash
+
+# Optionally, specify a repository to install from:
+# curl -fsSL https://raw.githubusercontent.com/fahadazizz/simpcode/main/install.sh | bash -s -- https://github.com/your-fork/simpcode.git
+```
+
+Notes:
+- The installer creates a local installation under `~/.local/share/simpcode`, sets up a virtual environment, installs the package in editable mode, and symlinks the `simp` CLI to `~/.local/bin`.
+- If `~/.local/bin` is not on your PATH, add it (for `zsh` / `bash` append to `~/.zshrc` / `~/.bashrc`):
+
+```bash
+export PATH="$PATH:${HOME}/.local/bin"
+```
+
+2) Manual (source) installation
+
+```bash
+git clone https://github.com/fahadazizz/simpcode.git
+cd simpcode
+python -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -e .
+```
+
+After manual install, add the venv bin to your shell PATH or create a local symlink to the `simp` entrypoint.
+
+3) Development workflow
+
+For contributors, prefer the editable install and run tests frequently:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .[dev]
+pytest -q
+```
+
+Troubleshooting common install issues
+
+- "Permission denied" when creating `~/.local/bin`: ensure the directory exists and you own it. Run `mkdir -p ~/.local/bin` and retry the installer.
+- Virtual environment creation error: ensure system Python 3.12+ is installed and `python3 -m venv` is available.
+- If the `simp` command is not found after install, ensure `~/.local/bin` is in your PATH and re-open your shell.
+
+
 Inside the TUI:
 
 ```text

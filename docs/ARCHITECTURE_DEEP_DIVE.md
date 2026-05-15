@@ -1,300 +1,102 @@
-# Architecture Deep Dive
+# Architecture Deep Dive — User + Engineer View
 
-This deep dive documents SimpCode internals from entrypoint to persistence with implementation-level accuracy.
+This document explains SimpCode internals at two levels:
 
-## 1. Entrypoints and Command Surface
+- User-focused behavior and guarantees (what you can expect when using `simp`).
+- Implementation pointers for engineers who want to inspect or modify the code.
 
-### CLI group behavior
+Use the Quick Navigation below to jump to the area you care about.
 
-The Click group in `src/simpcode/cli/main.py` is invoked with `invoke_without_command=True`.
+## Quick Navigation
 
-Implication:
+- [User guarantees & behavior](#user-guarantees--behavior)
+- [High-level component map](#high-level-component-map)
+- [Where to find implementation](#where-to-find-implementation)
+- [Wiki engine details & performance guarantees](#wiki-engine-details--performance-guarantees)
+- [Executor & verification behavior](#executor--verification-behavior)
+- [Operational notes for teams](#operational-notes-for-teams)
 
- - running `simp` with no subcommand launches TUI directly,
- - this is the primary user path,
- - interactive chat is available via the TUI; check available subcommands with `simp --help` or inspect `src/simpcode/cli/` for current handlers.
+---
 
-### Root options
+## User guarantees & behavior
 
-The root command supports:
+These are the runtime guarantees SimpCode provides to users and reviewers:
 
-- `--provider`
-- `--model`
-- `--session`
-- `--new`
+- Plan approval: No writes occur without an approved plan (unless you explicitly use `--yes`).
+- Scoped writes: The executor enforces a write scope derived from the plan; writes outside the scope are blocked.
+- Deterministic verification: After a write, the executor runs deterministic verification commands (linters, unit tests) when provided.
+- Inspectable artifacts: Plans, sessions, logs, and wiki pages are persisted under `.simp/` for auditing.
 
-These values are passed to `SimpShell` and can override loaded session defaults.
+If your usage model depends on different guarantees, define them in your team conventions and encode them in onboarding and plan review steps.
 
-## 2. TUI Command Router Details
+---
 
-`SimpShell._route_command` maps slash commands to handlers.
-
-Implemented handlers:
-
-- ask, do, sync, status, recover, init, wiki, config, sessions, simp, clear, help
-
-Chat fallback:
-
-- non-slash input routes to `_handle_chat`, which performs context scan and LLM interactive reply with session history persistence.
-
-## 3. Onboarding and Initialization Path
-
-Onboarding gate in `needs_onboarding` checks:
-
-- `SIMP.md` existence
-- `.simp/wiki/index.md` existence
-
-If missing, `_ensure_onboarded` chooses one of two paths:
-
-1. skeleton initialization:
-   - static templates and baseline wiki structure
-2. legacy synthesis import:
-   - project analyzer metadata
-   - synthesized docs
-   - wiki bootstrap generation
-   - fallback to skeleton on synthesis failure
-
-## 4. Context Assembly Pipeline (`ScanScene`)
-
-### Mandatory context
-
-- `SIMP.md`, `SPEC.md` when present
-- wiki pages `index` and `invariants`
-- selected skill documents from global/project skill directories
-
-### Auto-healing behavior
-
-If mandatory wiki page is stale, SimpCode attempts regeneration before context inclusion.
-
-### Navigation passes
-
-`WikiNavigator` can request additional pages over multiple passes.
-
-For each page loaded:
-
-- stale pages are healed,
-- still-stale pages are excluded,
-- semantic content is added,
-- file range snippets are added to targeted tier.
-
-### Budget enforcement
-
-`ContextBudgeter` keeps mandatory tier and drops optional items as needed with warnings.
-
-## 5. Planner Internals (`PlanGenerator`)
-
-Planner interaction uses structured output with `ArchitectResponse`.
-
-Possible outcomes:
-
-- direct plan
-- context request (`pages_to_load`) for another planning turn
-
-Planner performs up to 3 turns before forcing final plan generation.
-
-Important detail:
-
-- if `SPEC.md` exists, planner prepends it to context.
-
-## 6. Executor Internals (`TakeAction`)
-
-### Allowed write scope
-
-Allowed files are derived from plan step targets that look like path/file targets.
-
-### Loop model
-
-For each step, model emits a `ToolCall` containing:
-
-- tool name
-- arguments
-- thought
-- `complete` boolean
-
-### Safety and reliability controls
-
-- loop ceiling per step,
-- failure counting per step,
-- repeated same tool-call tripwire,
-- explicit blocking on plan/security violations.
-
-### Verification policy
-
-After write/patch:
-
-1. `flake8 <file>`
-2. step-specific verification command if defined
-
-Failure in either marks step turn as failed and pushes corrective behavior.
-
-### Wiki coupling on mutation
-
-After file write/patch, executor attempts wiki sync for impacted pages using O(1) registry lookup and regeneration path.
-
-After plan execution with modified files:
-
-- append `changes` page log entry
-- update index hotspots with modified paths.
-
-## 7. Tool Harness Security Model
-
-`ToolHarness` enforces:
-
-- normalized absolute paths
-- root-bound traversal checks
-- exclusion filter rules
-- plan-approved write scope
-
-`run_shell` is intentionally conservative:
-
-- forbidden shell control tokens rejected
-- command allowlist enforced
-- subprocess executed with `shell=False`
-
-## 8. Wiki Engine Deep Details
-
-### Data model
-
-Each page has metadata and content.
-
-Metadata includes source references with hashes and optional line spans.
-
-`_previous_sources` is a private, non-serialized field used to optimize registry cleanup.
-
-### Registry behavior
-
-Registry file: `.simp/wiki/registry.json`
-
-- key: source file path
-- value: list of wiki page IDs
-
-`get_pages_for_file`:
-
-- dictionary retrieval (`registry.get(file_path, [])`), O(1)
-
-`save_page`:
-
-- removes old mappings using tracked previous sources (O(s))
-- fallback O(m) scan only for edge case (loaded page + clearing sources)
-- writes new mappings and updates cached registry state
-
-### Page listing cache
-
-`get_all_pages` uses wiki directory mtime cache.
-
-- unchanged mtime + non-empty cache -> O(1) return
-- changed mtime -> recursive scan and parse
-
-### Staleness checks
-
-For each source reference:
-
-- if file missing -> stale (`DELETED`)
-- if hash mismatch -> stale with current hash
-
-## 9. Session, Logs, and Tokens
-
-Session manager stores serialized state in `.simp/sessions`.
-
-Execution logger writes JSONL traces per session in `.simp/logs`.
-
-Token logger appends usage estimate entries to `.simp/tokens.log`.
-
-## 10. Provider Resolution and Backoff
-
-`LLMClient` resolution order:
-
-1. explicit runtime override
-2. persisted config provider entry
-3. environment fallback
-
-Retry/backoff wrapper retries retryable API/server conditions with exponential delay.
-
-Structured output includes one extra corrective attempt for schema compliance failures when appropriate.
-
-## 11. Index and Knowledge Topology
-
-`IndexManager` maintains `index.md` under a token budget.
-
-Pruning order when oversized:
-
-1. hotspots
-2. decisions
-3. modules
-
-Hotspot updates keep newest entries first and cap list length.
-
-## 12. Skills System
-
-Skill locations:
-
-- global: `~/.simpcode/skills/*.md`
-- project: `.simp/skills/*.md`
-
-Project skills override global by matching skill ID.
-
-Skill selector uses structured LLM output to choose task-relevant skills for context assembly.
-
-## 13. Operational Guarantees and Non-Guarantees
-
-### Intended guarantees
-
-- explicit plan approval path,
-- scoped writes and safer execution primitives,
-- persistent artifacts for inspectability,
-- wiki/source consistency mechanisms.
-
-### Non-guarantees
-
-- not all command stubs are feature-complete (`/wiki search` placeholder),
-- LLM quality still depends on provider/model quality,
-- complex shell workflows are intentionally constrained.
-
-## 14. Practical Implication for Teams
-
-SimpCode is strongest when treated as:
-
-- a controlled assistant for scoped implementation work,
-- a local knowledge and audit artifact generator,
-- a repeatable execution framework with inspectable traces.
-
-It is weakest when asked to behave like unconstrained autonomous shell automation.
-
-## 15. System Diagram (High-level)
-
-The following Mermaid diagram summarizes the primary runtime components and their interactions. It is intended to help engineers quickly map code locations to architectural responsibilities.
+## High-level component map
 
 ```mermaid
 flowchart LR
-   CLI["CLI / TUI (simp)"] -->|invokes| Shell[SimpShell]
-   Shell -->|routes| Planner[PlanGenerator]
-   Planner -->|produces plan| Executor[TakeAction / Executor]
-   Executor -->|uses| ToolHarness[ToolHarness]
-   Executor -->|updates| WikiEngine[Wiki Engine]
-   WikiEngine -->|persists| Registry[.simp/wiki/registry.json]
-   WikiEngine -->|reads/writes| WikiFS[.simp/wiki/*.md]
-   Executor -->|uses| LLM[LLMClient]
-   LLM -->|provider| ExternalAPI[Provider (OpenAI/Anthropic/...)]
-   Executor -->|logs| ExecLogs[.simp/logs/*.jsonl]
-   Shell -->|stores| Sessions[.simp/sessions]
-   IndexManager[IndexManager] -.->|reads| WikiFS
-   IndexManager -.->|writes| IndexFile[index.md]
-   ToolHarness -->|executes sandboxed| Subprocess[Local subprocess]
-   subgraph Code
-      Planner
-      Executor
-      WikiEngine
-      ToolHarness
-      IndexManager
-   end
+  CLI["CLI / TUI (simp)"] -->|routes| Shell[SimpShell]
+  Shell --> Planner[PlanGenerator]
+  Planner --> Executor[TakeAction]
+  Executor --> ToolHarness[ToolHarness]
+  Executor --> WikiEngine[Wiki Engine]
+  WikiEngine --> Registry[.simp/wiki/registry.json]
+  Executor --> Logs[.simp/logs]
+  Planner --> LLM[LLMClient]
+  LLM -->|provider| ExternalAPI[Providers]
 ```
 
-Notes:
+---
 
-- `SimpShell` is the user-facing router implemented in `src/simpcode/cli/shell.py`.
-- `PlanGenerator` is implemented in `src/simpcode/core/planner.py` and uses structured LLM outputs.
-- `Executor` (TakeAction) is in `src/simpcode/core/executor.py` and orchestrates tool calls and verification.
-- `WikiEngine` is in `src/simpcode/wiki/engine.py`; the registry is an inverted index mapping source files to wiki pages for O(1) lookups.
-- `ToolHarness` enforces path scoping and an allowlist for shell commands in `src/simpcode/harness/tools.py`.
+## Where to find implementation
 
-For a deeper walk-through, see the sections above that map behavior to file locations.
+- CLI and TUI routing: `src/simpcode/cli/main.py`, `src/simpcode/cli/shell.py`
+- Planner: `src/simpcode/core/planner.py` (structured output and ArchitectResponse parsing)
+- Executor/TakeAction: `src/simpcode/core/executor.py`
+- Tool harness and safety: `src/simpcode/harness/tools.py`, `src/simpcode/harness/permissions.py`
+- Wiki engine: `src/simpcode/wiki/engine.py`, `src/simpcode/wiki/models.py`, `src/simpcode/wiki/index.py`
+- Index Manager: `src/simpcode/core/generator.py` and `src/simpcode/wiki/index.py`
+- LLM adapters: `src/simpcode/core/llm/*` (openai, anthropic, google, etc.)
+- State, logs, and execution artifacts: `src/simpcode/core/state.py`
+
+---
+
+## Wiki engine details & performance guarantees
+
+Behavioral summary:
+
+- The wiki engine maintains an inverted registry mapping source file paths to wiki page IDs in `.simp/wiki/registry.json`.
+- `get_pages_for_file(file_path)` performs an O(1) dictionary lookup against the registry — this is the fast path used during execution and sync.
+- `save_page(page)` attempts to remove only prior source mappings by using a private metadata attribute `_previous_sources` when present; this makes cleanup proportional to the number of sources for that page (O(s)).
+- As an edge case, if `_previous_sources` is not available (page loaded from disk without metadata), `save_page` falls back to scanning the registry (O(m)). This is rare and only used to maintain correctness.
+- `get_all_pages()` caches results using the wiki directory mtime to avoid full rescans when nothing changed.
+
+Why this matters:
+
+- Lookups for pages impacted by a file change are constant-time (O(1)).
+- Saving a page that references a small number of sources will scale with the number of sources, not the total number of pages.
+
+---
+
+## Executor & verification behavior
+
+- The executor derives an explicit write scope from the approved plan and blocks operations outside that scope.
+- After each write/patch, the executor runs `flake8 <file>` and then the step-specific `verification` command if provided.
+- All steps, tool calls, stdout/stderr, and verification results are appended to a JSONL trace in `.simp/logs/exec_<session>.jsonl`.
+
+Engineering pointers:
+
+- Look at `TakeAction.execute` in `src/simpcode/core/executor.py` and `ToolHarness` in `src/simpcode/harness/tools.py` for exact enforcement logic.
+
+---
+
+## Operational notes for teams
+
+- Use `--dry-run` for high-risk tasks and require a code-review style approval before executing real writes.
+- Prefer small, deterministic verification commands so the executor yields consistent results.
+- When onboarding a repository, accept that the first run may perform more scanning and synthesis; iteration stabilizes indexed artifacts.
+- Keep `.simp/` in your review/backup scope for auditability; treat it as a first-class project artifact.
+
+---
+
+If you need sequence diagrams, deploy/emergency runbooks, or a tailored architecture doc for a specific integrator (CI, internal model provider), I can add those next.

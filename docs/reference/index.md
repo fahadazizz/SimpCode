@@ -83,7 +83,46 @@ Attempts recovery by loading most recent saved plan artifact.
 - `/help`
 - `/exit`
 
-## 3. Session Data Model
+## 3. Quick Operator Reference (cheat sheet)
+
+- Run a dry-run plan:
+
+```text
+/do <task> --dry-run
+```
+
+- Execute approved plan (skip approval):
+
+```text
+/do <task> --yes
+```
+
+- Regenerate stale wiki pages:
+
+```text
+/sync
+```
+
+- Recover most recent plan after interruption:
+
+```text
+/recover
+```
+
+## 4. Persisted Artifacts and Locations
+
+- `.simp/wiki/` — Markdown wiki pages.
+- `.simp/wiki/registry.json` — inverted index mapping source file paths to page IDs (used for O(1) lookups).
+- `.simp/plans/` — persisted plan JSON artifacts.
+- `.simp/sessions/` — serialized session state.
+- `.simp/logs/` — JSONL execution traces.
+
+Important notes:
+
+- If you manually edit wiki pages, run `/sync` to refresh registry mappings.
+- The registry and cache behavior are designed to favor safety over aggressive invalidation—see Architecture Deep Dive for details.
+
+## 5. Session Data Model
 
 Persisted session fields include:
 

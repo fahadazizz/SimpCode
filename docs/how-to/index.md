@@ -1,35 +1,52 @@
 # How-To Guides
 
-Use this section for task-focused instructions.
+This section provides concise recipes for common tasks. Each recipe lists a goal, the commands to run, and verification steps.
 
-## Guides
+Guides
 
 - [Advanced Capabilities](advanced-capabilities.md)
 - [Writing Rules and Prompting Guidance](writing-rules.md)
 
-## Most Common How-To Tasks
+Common recipes
 
-### Run a safe implementation cycle
+Run a safe implementation cycle
+
+Goal: Make a small, reviewable change with tests and verification.
+
+Commands:
 
 1. `/status`
-2. `/do <task> --dry-run`
-3. review plan
-4. `/do <task>`
+2. `/do <task> --dry-run`  # review the generated plan
+3. approve the plan if targets and verifications look correct
+4. `/do <task> --yes`
 5. `/sync`
 6. `/status`
 
-### Resume interrupted work
+Resume interrupted work
 
-1. `/sessions`
-2. `/sessions --switch <id>` or `/recover`
+Goal: Recover the latest plan and resume safely.
 
-### Keep manifests aligned
+Commands:
+
+1. `/recover`  # loads the most recent persisted plan and asks for approval
+
+Keep SIMP manifest updated
+
+Goal: Ensure the project manifest `SIMP.md` reflects current decisions.
+
+Commands:
 
 1. `/simp show`
-2. `/simp update <instruction>`
+2. `/simp update <instruction>`  # propose and optionally apply an update
 
-### Inspect wiki reliability
+Inspect and heal wiki pages
+
+Goal: Find stale or missing pages and trigger regeneration.
+
+Commands:
 
 1. `/wiki list`
 2. `/wiki show <page-id>`
-3. `/sync` for stale pages
+3. `/sync`  # attempts to regenerate stale pages
+
+Use these recipes as templates and adapt file paths and verification commands to your repository.

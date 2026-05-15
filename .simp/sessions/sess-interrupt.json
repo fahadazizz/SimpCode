@@ -1,0 +1,22 @@
+{
+  "session_id": "sess-interrupt",
+  "project_root": "/private/var/folders/r6/f6rbcjnx0ts5l68t8x7cj48r0000gn/T/pytest-of-mf/pytest-3/test_workflows_do_persists_int0/project",
+  "history": [],
+  "current_provider": "groq",
+  "current_model": "llama-3.3-70b-versatile",
+  "started_at": 1778881728.0016918,
+  "ended_at": 1778881728.014167,
+  "tasks_performed": [
+    "improve reliability"
+  ],
+  "plans_produced": [
+    "task_1778881728"
+  ],
+  "files_modified": [],
+  "errors_encountered": [
+    "KeyboardInterrupt during execution"
+  ],
+  "final_summary": "Interrupted while executing task: improve reliability",
+  "status": "interrupted",
+  "last_updated": 1778881728.014237
+}

@@ -11,61 +11,81 @@ How to leverage this:
 - provide clear task intent,
 - allow dry-run plan generation,
 - rerun after improving wiki/manifests if planner still lacks context.
-
-## 2. Skill Injection for Task-Specific Reasoning
-
-SimpCode can load skills from:
-
 - global `~/.simpcode/skills/*.md`
 - project `.simp/skills/*.md`
-
-Project skills override global skills by matching skill ID.
-
-Use this to encode repeatable domain reasoning patterns.
-
 ## 3. Execution Trace Auditing
 
-Each execution writes JSONL traces in `.simp/logs/`.
-
-Use trace logs to:
-
-- inspect failed tool calls,
 - detect repeated loop patterns,
 - compare behavior across models/providers.
-
-## 4. Controlled Recovery from Broken Runs
-
-`/recover` loads latest plan artifact and asks approval.
-
 Advanced practice:
-
-- inspect latest plan JSON before recovery,
-- compare with current repository state,
-- if drift is high, rerun `/do` with narrower scope instead of force recovering.
 
 ## 5. Wiki Consistency as an Engineering Signal
 
-Treat stale pages as signal:
-
-- stale pages imply knowledge drift from source,
-- run `/sync` before planning sensitive changes,
 - use `changes` page and hotspots to audit recent mutation footprint.
 
-## 6. Provider Strategy by Workflow Type
-
-Practical strategy:
-
-- high-fidelity planning tasks: prefer strongest structured-output model available,
 - rapid exploratory tasks: use faster model,
 - local-only environments: configure Ollama for privacy/control.
-
-## 7. Operating With Strict Scope Discipline
-
-For high-risk repositories:
-
 - always use `/do --dry-run`,
 - reject plans with broad or unclear targets,
 - require explicit verification commands,
+# Advanced Capabilities
+
+This page explains operational features you will use when you need more control: index generation, token budgeting, provider switching, and wiki maintenance.
+
+Index generation and token budgeting
+----------------------------------
+
+`IndexManager` constructs `index.md` by selecting the most relevant wiki pages under a token budget. If the assembled index exceeds the token budget, SimpCode prunes lower-priority sections (hotspots, decisions, modules) to fit the budget.
+
+When to use:
+
+- large repositories where a full context exceeds the model token limit,
+- reducing the context the planner receives to improve response stability.
+
+Provider switching and model experimentation
+-------------------------------------------
+
+You can switch providers and models during a session with `/config` or `simp setup`.
+
+Examples:
+
+```text
+/config --provider openai
+/config --model gpt-4o-mini
+```
+
+Recommendations:
+
+- For deterministic plan structure testing, use smaller models or fixed temperature settings.
+- For synthesis-heavy tasks (onboarding, bootstrap), prefer larger-capacity models.
+
+Wiki maintenance and staleness handling
+--------------------------------------
+
+Use `/status` to list stale pages. `/sync` will attempt to regenerate stale pages using the current project context. The Wiki Engine maintains a file->page registry for fast lookups and uses cached mtime checks to avoid expensive rescans.
+
+When to run manual maintenance:
+
+- after large refactors that move or delete many files,
+- when onboarding a repo that had no previous `.simp/wiki` artifacts.
+
+Advanced recipes
+----------------
+
+1) Rebuild index with a smaller token budget
+
+```text
+# edit .simp/config or use interactive config to reduce token budget
+/do rebuild index --dry-run
+```
+
+2) Test a plan under a different provider
+
+```text
+/config --provider openai
+# regenerate the plan or re-run the previous dry-run
+/do <task> --dry-run
+```
 - split large tasks into multiple narrow `/do` runs.
 
 ## 8. Advanced Prompt Pattern

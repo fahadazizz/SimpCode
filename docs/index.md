@@ -1,90 +1,49 @@
 # SimpCode Documentation Portal
+# SimpCode Documentation Portal — User-Focused Map
 
-SimpCode is a local, TUI-first engineering assistant designed for real repositories and real workflows.
+This portal is written for engineers and teams integrating SimpCode into their daily workflows. Use the sections below to find the right materials for your role and intent.
 
-This portal is organized so you can move from first-run setup to daily engineering usage, then into architecture and implementation detail when needed.
+Start here
 
-## Start Here
+- New to SimpCode? Read the Getting Started path for installation, onboarding, and a first productive session.
+- Evaluating automation risk? Read the Safety and Verification sections in the User Guide and Troubleshooting.
+- Integrating into CI or contributing code? See Development and Contributing.
 
-- If you are new to SimpCode, begin with [Getting Started Overview](getting-started/overview.md).
-- If you want the complete user flow from installation to productive execution, use [User Guide](guide.md).
-- If you are trying to solve a specific task quickly, jump to [How-To Guides](how-to/index.md).
-- If you need exact command behavior and on-disk artifact details, use [Reference](reference/index.md).
-- If something is failing or inconsistent, use [Troubleshooting](TROUBLESHOOTING.md).
+Documentation map (by user intent)
 
-## Documentation Map
+- Getting Started (first-run, install, onboarding)
+	- [Overview](getting-started/overview.md)
+	- [Installation & Setup](getting-started/setup-and-usage.md)
+	- [Installation Deep Dive](getting-started/installation-deep-dive.md)
+	- [File Ownership and Permissions](getting-started/file-ownership.md)
 
-### Getting Started
+- Day-to-day Use (operators and power users)
+	- [User Guide / Workflows](guide.md)
+	- [How-To Index (task recipes)](how-to/index.md)
+	- [Writing Rules & Prompting Guidance](how-to/writing-rules.md)
 
-- [Overview](getting-started/overview.md)
-- [Installation Deep Dive](getting-started/installation-deep-dive.md)
-- [Setup and Usage](getting-started/setup-and-usage.md)
-- [File Ownership](getting-started/file-ownership.md)
+- Reference (operators and debuggers)
+	- [Reference & Command Behaviour](reference/index.md)
+	- [Troubleshooting Quick Checks](TROUBLESHOOTING.md)
 
-### Concepts
+- Deep Technical Material (engineers, reviewers)
+	- [Architecture Deep Dive](ARCHITECTURE_DEEP_DIVE.md)
+	- [Comprehensive Guide](COMPREHENSIVE_GUIDE.md)
 
-- [Concepts Index](concepts/index.md)
-- [Architecture Concept](concepts/architecture.md)
+How to pick what to read
 
-### How-To
+- Beginners: follow the Getting Started sequence top-to-bottom.
+- Daily users: skim the Quick Start and keep `Reference` and `Troubleshooting` bookmarked.
+- Engineers: read the Architecture Deep Dive and Comprehensive Guide before changing core behavior.
 
-- [How-To Index](how-to/index.md)
-- [Advanced Capabilities](how-to/advanced-capabilities.md)
-- [Writing Rules and Prompting Guidance](how-to/writing-rules.md)
+Recommended reading order
 
-### Reference and Operations
+1. Getting Started Overview
+2. Installation & Setup
+3. User Guide (Workflows)
+4. How-To Index (task recipes)
+5. Reference
+6. Architecture Deep Dive
 
-- [Reference](reference/index.md)
-- [Troubleshooting](TROUBLESHOOTING.md)
-
-### Deep Technical Material
-
-- [Architecture Deep Dive](ARCHITECTURE_DEEP_DIVE.md)
-- [Comprehensive Guide](COMPREHENSIVE_GUIDE.md)
-
-## What Is Accurate in This Documentation
-
-This documentation has been rewritten against the current implementation in:
-
+If you find inaccurate or outdated text, please create a small PR or open an issue so documentation and implementation remain in sync.
 - CLI and TUI command handlers in `src/simpcode/cli/main.py` and `src/simpcode/cli/shell.py`
-- Workflow orchestration in `src/simpcode/core/workflows.py`
-- Planner and executor flow in `src/simpcode/core/planner.py` and `src/simpcode/core/executor.py`
-- Wiki storage, freshness checks, and registry logic in `src/simpcode/wiki/engine.py`
-- Path and persistence behavior in `src/simpcode/core/paths.py`, `src/simpcode/utils/paths.py`, and `src/simpcode/core/state.py`
-
-If behavior changes in code, this documentation should be updated in lockstep.
-
-## Recommended Reading Order
-
-1. [Getting Started Overview](getting-started/overview.md)
-2. [Setup and Usage](getting-started/setup-and-usage.md)
-3. [User Guide](guide.md)
-4. [How-To Index](how-to/index.md)
-5. [Reference](reference/index.md)
-6. [Architecture Deep Dive](ARCHITECTURE_DEEP_DIVE.md)
-
-## Reader Profiles
-
-### I just want to use SimpCode effectively
-
-Read:
-
-- [Getting Started Overview](getting-started/overview.md)
-- [Setup and Usage](getting-started/setup-and-usage.md)
-- [User Guide](guide.md)
-
-### I need operational confidence and recovery paths
-
-Read:
-
-- [Reference](reference/index.md)
-- [Troubleshooting](TROUBLESHOOTING.md)
-- [How-To Advanced Capabilities](how-to/advanced-capabilities.md)
-
-### I need to understand internals before trusting behavior
-
-Read:
-
-- [Concepts Architecture](concepts/architecture.md)
-- [Architecture Deep Dive](ARCHITECTURE_DEEP_DIVE.md)
-- [Comprehensive Guide](COMPREHENSIVE_GUIDE.md)

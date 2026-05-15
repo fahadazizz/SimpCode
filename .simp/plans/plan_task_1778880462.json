@@ -1,0 +1,15 @@
+{
+  "task_id": "task_1778880462",
+  "rationale": "r",
+  "steps": [
+    {
+      "id": 1,
+      "target": "src/app.py",
+      "action": "edit",
+      "rationale": "r",
+      "verification": "pytest"
+    }
+  ],
+  "scope_exclusions": [],
+  "risk_level": "medium"
+}

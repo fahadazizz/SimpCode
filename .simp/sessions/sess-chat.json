@@ -1,0 +1,27 @@
+{
+  "session_id": "sess-chat",
+  "project_root": "/private/var/folders/r6/f6rbcjnx0ts5l68t8x7cj48r0000gn/T/pytest-of-mf/pytest-3/test_workflows_chat_turn_strea0/project",
+  "history": [
+    {
+      "role": "user",
+      "content": "How are you?",
+      "timestamp": 1778881728.0411131
+    },
+    {
+      "role": "assistant",
+      "content": "Hello world",
+      "timestamp": 1778881728.041125
+    }
+  ],
+  "current_provider": "groq",
+  "current_model": "llama-3.3-70b-versatile",
+  "started_at": 1778881728.0374541,
+  "ended_at": null,
+  "tasks_performed": [],
+  "plans_produced": [],
+  "files_modified": [],
+  "errors_encountered": [],
+  "final_summary": null,
+  "status": "active",
+  "last_updated": 1778881728.041166
+}
