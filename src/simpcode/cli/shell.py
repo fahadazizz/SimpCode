@@ -336,6 +336,8 @@ class SimpShell:
             provider=self.state.current_provider,
             approval_prompt=self.session.prompt,
             model=self.state.current_model,
+            session_manager=self.session_manager,
+            session_state=self.state,
         )
 
     def _cmd_sync(self, args: str):

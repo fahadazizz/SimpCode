@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from pathlib import Path
 from simpcode.wiki.models import WikiPage, WikiPageMetadata, SourceReference
 import time
+import tiktoken
 
 class IndexEntry(BaseModel):
     name: str
@@ -19,8 +20,15 @@ class IndexManager:
         self.wiki_dir = wiki_dir
         self.token_budget = token_budget
         self.index_path = wiki_dir / "index.md"
-        # Token estimation: tiktoken would be better, but character count with buffer is safer than naive math
-        self.char_budget = token_budget * 3 
+        try:
+            self.encoding = tiktoken.get_encoding("cl100k_base")
+        except Exception:
+            self.encoding = None
+
+    def _count_tokens(self, text: str) -> int:
+        if self.encoding is None:
+            return len(text)
+        return len(self.encoding.encode(text))
 
     def update_index(self, modules: List[IndexEntry], decisions: List[IndexEntry], hotspots: List[str]):
         """
@@ -39,7 +47,7 @@ class IndexManager:
             return header + "\n".join(m_list) + "\n".join(d_list) + "\n".join(h_list)
 
         # Trimming loop
-        while len(assemble_content(hotspot_lines, decision_lines, module_lines)) > self.char_budget:
+        while self._count_tokens(assemble_content(hotspot_lines, decision_lines, module_lines)) > self.token_budget:
             if len(hotspot_lines) > 1:
                 hotspot_lines.pop() # Remove oldest hotspots first
             elif len(decision_lines) > 1:

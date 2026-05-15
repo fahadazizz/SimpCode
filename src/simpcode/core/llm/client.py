@@ -1,5 +1,7 @@
 import os
-from typing import List, Dict, Any, Optional
+import time
+import functools
+from typing import List, Dict, Any, Optional, Iterator
 
 from .anthropic_provider import AnthropicProvider
 from .base import LLMProvider
@@ -10,6 +12,41 @@ from simpcode.core.paths import get_project_root
 from simpcode.core.prompts import registry
 from simpcode.core.state import TokenLogger
 
+
+_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 529}
+
+
+def _is_retryable_error(error: Exception) -> bool:
+    status_code = getattr(error, "status_code", None)
+    if status_code in _RETRYABLE_STATUS_CODES:
+        return True
+
+    response = getattr(error, "response", None)
+    if response is not None and getattr(response, "status_code", None) in _RETRYABLE_STATUS_CODES:
+        return True
+
+    error_msg = str(error).lower()
+    return any(code in error_msg for code in ["429", "529", "too many requests", "rate limit", "502", "503", "500"])
+
+def with_backoff(max_retries=3, base_delay=2):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            delay = base_delay
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    if _is_retryable_error(e):
+                        if attempt == max_retries - 1:
+                            raise
+                        print(f"API rate limit or server error ({e}). Retrying in {delay}s...")
+                        time.sleep(delay)
+                        delay *= 2
+                    else:
+                        raise
+        return wrapper
+    return decorator
 
 class LLMClient:
     """
@@ -131,6 +168,7 @@ class LLMClient:
 
         return base
 
+    @with_backoff()
     def chat(self, messages: List[Dict[str, str]], system_instruction: Optional[str] = None) -> str:
         self.refresh()
         full_system = self._build_system_instruction(system_instruction)
@@ -142,13 +180,46 @@ class LLMClient:
 
         return response
 
-    def structured_output(self, prompt: str, schema: Any, system_instruction: Optional[str] = None) -> Any:
+    def stream_chat(self, messages: List[Dict[str, str]], system_instruction: Optional[str] = None) -> Iterator[str]:
+        """Streams chat output when the active provider supports it, otherwise yields one full response."""
         self.refresh()
-        full_system = self._build_system_instruction(system_instruction, is_structured=True)
+        full_system = self._build_system_instruction(system_instruction)
+        stream_method = getattr(self.provider, "stream_chat", None)
 
-        response = self.provider.structured_output(prompt, schema, full_system)
+        if not callable(stream_method):
+            yield self.chat(messages, system_instruction)
+            return
+
+        chunks: List[str] = []
+        for chunk in stream_method(messages, full_system):
+            if not chunk:
+                continue
+            chunks.append(chunk)
+            yield chunk
 
         usage = self.provider.get_token_usage()
         self.logger.log_usage(self.model_id, usage["input"], usage["output"])
 
-        return response
+    @with_backoff()
+    def structured_output(self, prompt: str, schema: Any, system_instruction: Optional[str] = None) -> Any:
+        self.refresh()
+        full_system = self._build_system_instruction(system_instruction, is_structured=True)
+        attempt_system = full_system
+
+        for attempt in range(2):
+            try:
+                response = self.provider.structured_output(prompt, schema, attempt_system)
+
+                usage = self.provider.get_token_usage()
+                self.logger.log_usage(self.model_id, usage["input"], usage["output"])
+
+                return response
+            except Exception as error:
+                if attempt == 0 and not _is_retryable_error(error):
+                    attempt_system = (
+                        f"{full_system}\n\n"
+                        f"Previous structured response failed with error: {error}. "
+                        f"Return only valid JSON matching the requested schema and no extra text."
+                    )
+                    continue
+                raise

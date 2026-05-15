@@ -13,3 +13,4 @@ Entry Point Samples:
 
 Synthesize SIMP.md (Governing Constitution) and optionally SPEC.md (Project Requirements).
 For SIMP.md: You MUST use the Constitution Framework as the core logic and append a 'Project Manifest' section summarizing the metadata (Name, Type, Entry Points).
+If you cannot synthesize a SPEC, leave spec_md empty (leave spec_md empty).

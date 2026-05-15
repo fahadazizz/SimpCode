@@ -25,19 +25,25 @@ class GetBetter:
 
     def run(self, task: str, execution_trace: str, files_modified: List[str] = None, rationale: str = None):
         system_instruction = registry.load("staff_researcher")
+        # Include project SPEC.md if present to ground proposals
+        spec_block = ""
+        try:
+            spec_path = Path(self.root) / "SPEC.md"
+            if spec_path.exists():
+                spec_block = spec_path.read_text().strip() + "\n\n"
+        except Exception:
+            spec_block = ""
+
         prompt = registry.load("staff_researcher_learning", include_base=False).format(
             task=task,
             execution_trace=execution_trace,
         )
+        # Prepend SPEC block to the rendered prompt to avoid template placeholder issues
+        prompt = f"SPEC (Target State, optional):\n{spec_block}{prompt}"
 
         proposals = self.llm.structured_output(prompt, EvolutionProposals, system_instruction)
         
-        # 1. Update changes.md through the high-integrity WikiEngine
-        self.wiki.append_change_log(
-            task_description=task,
-            files_modified=files_modified or [],
-            rationale=rationale or proposals.change_log_entry
-        )
+
         
         # 2. Surface cognitive proposals for human validation
         return proposals

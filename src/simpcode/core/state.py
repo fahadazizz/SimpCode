@@ -15,6 +15,14 @@ class SessionState(BaseModel):
     history: List[SessionMessage] = Field(default_factory=list)
     current_provider: str = "groq"
     current_model: str = "llama-3.3-70b-versatile"
+    started_at: float = Field(default_factory=time.time)
+    ended_at: Optional[float] = None
+    tasks_performed: List[str] = Field(default_factory=list)
+    plans_produced: List[str] = Field(default_factory=list)
+    files_modified: List[str] = Field(default_factory=list)
+    errors_encountered: List[str] = Field(default_factory=list)
+    final_summary: Optional[str] = None
+    status: str = "active"
     last_updated: float = Field(default_factory=time.time)
 
 class SessionManager:

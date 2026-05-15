@@ -81,6 +81,10 @@ class ScanScene:
                 if self.wiki.is_page_stale(page):
                     print(f"  [Scan] Auto-healing stale Wiki page: {page_id}")
                     self._heal_page(page)
+                    # If still stale after healing, exclude from context
+                    if self.wiki.is_page_stale(page):
+                        print(f"  [Scan] Excluding still-stale page: {page_id}")
+                        continue
                 
                 semantic_items.append(ContextItem(id=page_id, content=page.content, priority=2))
                 # Resolve File:Line pointers (Targeted Tier)
@@ -103,16 +107,19 @@ class ScanScene:
     def _heal_page(self, page: WikiPage):
         """Regenerates a Wiki page to match current source truth."""
         instruction = registry.load("wiki_maintainer")
+        if hasattr(self.wiki, "regenerate_page_from_code") and self.wiki.regenerate_page_from_code(page, self.llm, instruction):
+            return
+
         code_context = ""
         for source in page.metadata.sources:
             full_path = self.root / source.file_path
             if full_path.exists():
                 code_context += f"--- {source.file_path} ---\n{full_path.read_text()[:5000]}\n\n"
-        
+
         if code_context:
             prompt = f"OLD CONTENT:\n{page.content}\n\nCurrent Code:\n{code_context}\n\nUpdate page."
             page.content = self.llm.chat([{"role": "user", "content": prompt}], instruction)
-            self.wiki.sync_hashes(page) # High-Integrity Sync
+            self.wiki.sync_hashes(page)
         else:
             print(f"  [Scan] Warning: Source files deleted for {page.metadata.id}. Excluded.")
 

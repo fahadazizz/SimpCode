@@ -1,4 +1,5 @@
 from typing import List, Optional
+from pathlib import Path
 from pydantic import BaseModel, Field
 from simpcode.core.prompts import registry
 from rich.console import Console
@@ -39,6 +40,15 @@ class PlanGenerator:
     def generate(self, task: str, initial_context: str) -> Plan:
         system_instruction = registry.load("staff_architect")
         current_context = initial_context
+
+        # If a SPEC.md exists in the project, include it prominently in context
+        try:
+            spec_path = Path(self.scanner.root) / "SPEC.md"
+            if spec_path.exists():
+                spec_text = spec_path.read_text().strip()
+                current_context = f"SPEC:\n{spec_text}\n\n" + current_context
+        except Exception:
+            pass
 
 
         max_turns = 3

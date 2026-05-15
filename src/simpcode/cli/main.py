@@ -83,6 +83,65 @@ def init():
         console.print(f"[bold red]Initialization failed:[/bold red] {e}")
 
 
+def _get_shell(ctx) -> SimpShell:
+    provider = ctx.parent.params.get("provider") if ctx.parent else None
+    model = ctx.parent.params.get("model") if ctx.parent else None
+    session = ctx.parent.params.get("session") if ctx.parent else None
+    return SimpShell(provider=provider, model=model, session_id=session)
+
+
+@cli.command()
+@click.argument("query", nargs=-1)
+@click.pass_context
+def ask(ctx, query):
+    """Ask a question about the codebase without making changes."""
+    query_str = " ".join(query)
+    _get_shell(ctx)._cmd_ask(query_str)
+
+
+@cli.command()
+@click.argument("task", nargs=-1)
+@click.option("--yes", is_flag=True, help="Auto-approve plan")
+@click.option("--dry-run", is_flag=True, help="Plan only, no execution")
+@click.pass_context
+def do(ctx, task, yes, dry_run):
+    """Execute a task."""
+    task_str = " ".join(task)
+    args = task_str
+    if yes: args += " --yes"
+    if dry_run: args += " --dry-run"
+    _get_shell(ctx)._cmd_do(args.strip())
+
+
+@cli.command()
+@click.pass_context
+def sync(ctx):
+    """Force wiki synchronization."""
+    _get_shell(ctx)._cmd_sync("")
+
+
+@cli.command()
+@click.pass_context
+def status(ctx):
+    """Show project status."""
+    _get_shell(ctx)._cmd_status("")
+
+
+@cli.command()
+@click.argument("args", nargs=-1)
+@click.pass_context
+def wiki(ctx, args):
+    """Manage or query the project Wiki."""
+    _get_shell(ctx)._cmd_wiki(" ".join(args))
+
+
+@cli.command()
+@click.pass_context
+def recover(ctx):
+    """Recover from a broken state or failed execution."""
+    _get_shell(ctx)._cmd_recover("")
+
+
 def main():
     cli()
 

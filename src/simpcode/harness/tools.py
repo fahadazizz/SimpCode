@@ -28,12 +28,20 @@ class ToolHarness:
             abs_path = (self.root / f).resolve()
             self.allowed_paths.add(str(abs_path))
 
-    def _check_scope(self, file_path: str):
+    def _check_read_scope(self, file_path: str):
         """
-        Structural safety gate: Validates path normalization, plan scope, and exclusions.
+        Structural safety gate for read operations.
+        Reads are allowed project-wide unless excluded.
         """
         if self.exclusion_filter.is_excluded(file_path):
             raise PermissionError(f"Security Violation: '{file_path}' matches a protected exclusion pattern.")
+
+    def _check_write_scope(self, file_path: str):
+        """
+        Structural safety gate for write operations.
+        Writes are restricted to plan-approved targets.
+        """
+        self._check_read_scope(file_path)
 
         full_path = (self.root / file_path).resolve()
         
@@ -53,8 +61,7 @@ class ToolHarness:
 
     def read_file(self, file_path: str) -> str:
         try:
-            # Enforce full scope check for reads as well. Raises PermissionError on violation.
-            self._check_scope(file_path)
+            self._check_read_scope(file_path)
 
             full_path = self.path_manager.normalize_path(self.root, file_path)
             if not full_path.exists():
@@ -64,51 +71,45 @@ class ToolHarness:
         except PermissionError as e:
             return f"Security Violation: {str(e)}"
 
+    def list_dir(self, dir_path: str = ".") -> str:
+        """
+        Read-only directory listing helper for contextual exploration.
+        """
+        try:
+            self._check_read_scope(dir_path)
+
+            full_path = self.path_manager.normalize_path(self.root, dir_path)
+            if not full_path.exists():
+                return f"Error: Directory '{dir_path}' does not exist."
+            if not full_path.is_dir():
+                return f"Error: Path '{dir_path}' is not a directory."
+
+            entries = []
+            for child in sorted(full_path.iterdir(), key=lambda path: (not path.is_dir(), path.name.lower())):
+                suffix = "/" if child.is_dir() else ""
+                entries.append(f"{child.name}{suffix}")
+            return "\n".join(entries)
+        except PermissionError as e:
+            return f"Security Violation: {str(e)}"
+
     def write_file(self, file_path: str, content: str):
         """
         High-integrity write: Enforces scope, creates directories, and updates Wiki.
         """
-        self._check_scope(file_path)
+        self._check_write_scope(file_path)
         
         full_path = self.root / file_path
         full_path.parent.mkdir(parents=True, exist_ok=True)
         
         full_path.write_text(content)
-        
-        # Immediate Semantic Consistency: update knowledge base before next tool call
-        self._update_wiki_integrity(file_path)
 
-    def _update_wiki_integrity(self, file_path: str):
-        """
-        Ensures the Wiki layer is updated IMMEDIATELY after a file write.
-        Updates hash to actual file hash so it doesn't drop from context.
-        """
-        pages = self.wiki.get_all_pages()
-        
-        for page in pages:
-            was_staled = False
-            for source in page.metadata.sources:
-                if source.file_path == file_path:
-                    full_source_path = self.root / source.file_path
-                    if full_source_path.exists():
-                        from simpcode.utils.hashes import calculate_file_hash
-                        if source.start_line and source.end_line:
-                            from simpcode.utils.hashes import calculate_range_hash
-                            source.hash = calculate_range_hash(str(full_source_path), source.start_line, source.end_line)
-                        else:
-                            source.hash = calculate_file_hash(str(full_source_path))
-                    else:
-                        source.hash = "DELETED"
-                    was_staled = True
-            
-            if was_staled:
-                self.wiki.save_page(page)
+
 
     def patch_file(self, file_path: str, old_string: str, new_string: str) -> str:
         """
         Precise patch operation: Robust patch with whitespace tolerance.
         """
-        self._check_scope(file_path)
+        self._check_write_scope(file_path)
         
         full_path = self.root / file_path
         if not full_path.exists():
@@ -140,8 +141,6 @@ class ToolHarness:
                 return "Error: Exact `old_string` not found in file, even with varying whitespace."
                 
         full_path.write_text(new_content)
-        
-        self._update_wiki_integrity(file_path)
         return "File patched. You MUST run verification next."
 
     def run_shell(self, command: str) -> str:

@@ -39,6 +39,14 @@ class ContextBudgeter:
             assembled_content.append(header + content)
             current_tokens += self.count_tokens(header + content)
 
+        if current_tokens > self.total_budget:
+            warning = (
+                "\n[SYSTEM WARNING: Mandatory context alone exceeds the total budget. "
+                "No mandatory items were dropped, but optional context will be omitted.]\n"
+            )
+            assembled_content.append(warning)
+            print("[Warning] Mandatory context exceeds total budget; optional context will be dropped.")
+
         # 2. Load Optional (Semantic Wiki pages and Targeted Code ranges)
         optional_items = sorted(semantic + targeted, key=lambda x: x.priority)
         
