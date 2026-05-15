@@ -1,47 +1,82 @@
-# Advanced Capabilities: Mastering SimpCode
+# Advanced Capabilities
 
-Because SimpCode is designed to replicate the agency of a Principal Software Engineer rather than act as a static completion script, adapting your workflows will exponentially increase the power of the framework.
+This guide covers advanced behaviors and how to use them intentionally.
 
----
+## 1. Multi-Turn Planning with Additional Context Requests
 
-## 1. Defining Hard Constraints (`SPEC.md` & `SIMP.md`)
+Planner can request extra wiki pages instead of forcing a weak plan.
 
-At initialization (`/init`), SimpCode creates or refreshes the project manifest and the project specification in your root tree.
-- **`SIMP.md`**: Outlines the core framework boundaries.
-- **`SPEC.md`**: Dictates the project's explicit target-state requirements (goals, constraints, quality bars).
+How to leverage this:
 
-### Expanding Capability via Constraints
-You can drastically increase code quality by physically writing strict requirements inside `SPEC.md`. E.g.:
-```markdown
-# My Project Guidelines
-- NEVER use standard Python assertions for logic flows.
-- Always implement the Rust strategy pattern (Result/Option).
-- Execute `npm run format:fix` after every physical web component execution. 
-```
-Every time you run `/do`, the `executor.py` ingests these files as **Priority 0 Mandatory Context**. The LLM cannot and will not deviate from explicitly typed directives located here.
+- provide clear task intent,
+- allow dry-run plan generation,
+- rerun after improving wiki/manifests if planner still lacks context.
 
-## 2. Panning Complex Orchestrations
+## 2. Skill Injection for Task-Specific Reasoning
 
-Often, you are not just writing code; you are trying to refactor massive logic systems or migrate database architectures. 
+SimpCode can load skills from:
 
-To utilize SimpCode's full power gracefully:
-1. Try breaking impossible demands: `/do Migrate the auth layer from Mongo to Postgres` 
-2. Into explicitly planned node executions:
-`/ask Write a rigorous implementation plan for migrating our Auth to Postgres inside auth_plan.md`
-3. Verify the plan yourself as a human observer.
-4. Issue the execution:
-`/do Execute the tasks explicitly identified in auth_plan.md. Act immediately.`
+- global `~/.simpcode/skills/*.md`
+- project `.simp/skills/*.md`
 
-## 3. Harnessing The "Evolution" Intelligence Loop
+Project skills override global skills by matching skill ID.
 
-Over the lifespan of a project, engineers invent custom abstractions, figure out workarounds for tricky dependencies, or find new deployment patterns natively suited to only that project structure.
+Use this to encode repeatable domain reasoning patterns.
 
-SimpCode implements a proprietary intelligence extraction layer called **GetBetter**. After completing an engineering task via `/do`, SimpCode parses its own execution trace. 
-- It logically summarizes what it did (maintaining the `changes.md` index).
-- It proposes modifications to structural risk boundaries and system behaviors.
-- The intelligence layer implicitly **deduplicates** logic to maintain an optimized context payload format (`patterns.md`, `risks.md`).
+## 3. Execution Trace Auditing
 
-This means **the more you use SimpCode on your project, the smarter it physically becomes** natively about that code base structure. 
+Each execution writes JSONL traces in `.simp/logs/`.
 
-## 4. Bypassing Framework Silos via Skills 
-For absolute maximum capabilities covering bespoke, non-standard CLI environments or proprietary private documentation pipelines, you can natively build abstract `Skills` and place them directly in the tree layers. The `ScanScene` router will dynamically evaluate and bind contextual priority payloads matching the bespoke architecture logic cleanly bypassing legacy API limits.
+Use trace logs to:
+
+- inspect failed tool calls,
+- detect repeated loop patterns,
+- compare behavior across models/providers.
+
+## 4. Controlled Recovery from Broken Runs
+
+`/recover` loads latest plan artifact and asks approval.
+
+Advanced practice:
+
+- inspect latest plan JSON before recovery,
+- compare with current repository state,
+- if drift is high, rerun `/do` with narrower scope instead of force recovering.
+
+## 5. Wiki Consistency as an Engineering Signal
+
+Treat stale pages as signal:
+
+- stale pages imply knowledge drift from source,
+- run `/sync` before planning sensitive changes,
+- use `changes` page and hotspots to audit recent mutation footprint.
+
+## 6. Provider Strategy by Workflow Type
+
+Practical strategy:
+
+- high-fidelity planning tasks: prefer strongest structured-output model available,
+- rapid exploratory tasks: use faster model,
+- local-only environments: configure Ollama for privacy/control.
+
+## 7. Operating With Strict Scope Discipline
+
+For high-risk repositories:
+
+- always use `/do --dry-run`,
+- reject plans with broad or unclear targets,
+- require explicit verification commands,
+- split large tasks into multiple narrow `/do` runs.
+
+## 8. Advanced Prompt Pattern
+
+When issuing `/do`, include:
+
+- files to touch,
+- files not to touch,
+- required verification command,
+- expected acceptance criteria.
+
+Example:
+
+"Update `src/payments/retry.py` only, do not modify API handlers, add tests to `tests/test_retry.py`, verify with `pytest tests/test_retry.py -q`, and preserve existing public function signatures."

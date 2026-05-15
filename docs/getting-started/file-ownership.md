@@ -1,59 +1,87 @@
-# Understanding File Ownership
+# File Ownership and Artifact Model
 
-After running `simp init`, SimpCode creates several files and directories to maintain its intelligence layer. Understanding which files you can safely edit and which should be left to the system is crucial for maintaining the integrity of the Semantic Wiki.
+This page explains which files SimpCode owns, updates, or reads.
 
----
+## 1. User-Owned vs SimpCode-Managed Files
 
-## User-Editable Files
+### User-owned source files
 
-These files are designed to be modified by you to guide SimpCode's behavior.
+Your application source files are still your files.
 
-### `SPEC.md`
-- **Owner**: User
-- **Purpose**: The authoritative project specification and target-state requirements.
-- **Safe to Edit?**: **YES.** Keep this current when the product direction, architecture, or constraints change.
+SimpCode may modify them only through approved plan execution scope.
+
+### SimpCode-managed operational artifacts
+
+SimpCode manages operational state under `.simp/` and selected top-level manifests.
+
+## 2. Top-Level Project Artifacts
 
 ### `SIMP.md`
-- **Owner**: Shared (Primarily User)
-- **Purpose**: The high-level project manifest and project overview.
-- **Safe to Edit?**: **YES.** Use it to summarize the repository structure, major modules, and important notes for SimpCode.
 
-### `src/simpcode/core/prompts/`
-- **Owner**: SimpCode
-- **Purpose**: Internal reasoning prompts used by the framework itself.
-- **Safe to Edit?**: **Only if you are modifying SimpCode itself.** These are not project-onboarding files.
+Primary project manifest used as high-priority context.
 
----
+Can be updated through:
 
-## SimpCode-Managed Files
+```text
+/simp update <instruction>
+```
 
-These files are the "internal brain" of the system. Manual edits can cause synchronization errors or hallucinations.
+### `SPEC.md`
 
-### `.simp/wiki/` (Directory)
-- **Owner**: SimpCode
-- **Purpose**: Contains the semantic Wiki nodes (knowledge base).
-- **Safe to Edit?**: **NO.** These files are managed by the engine. If you manually edit a wiki node, the hashes will mismatch and SimpCode will consider the knowledge stale or corrupted.
-- **How to update**: If the information here is wrong, run `simp sync` or make the corresponding code changes and let SimpCode refresh the Wiki.
+Optional target-state/project spec.
 
-### `.simp/index.json`
-- **Owner**: SimpCode
-- **Purpose**: The master index that maps file hashes to wiki entries.
-- **Safe to Edit?**: **NO.** Deleting or corrupting this file will require a full `simp init --force` to recover.
+Loaded into mandatory context when present.
 
----
+## 3. `.simp/` Artifact Ownership
 
-## ⚖️ Summary Table
+### `.simp/wiki/`
 
-| File/Path | Managed By | User Safe? | Action on Conflict |
-| :--- | :--- | :--- | :--- |
-| `SPEC.md` | User | Yes | Edit to change the target-state requirements. |
-| `SIMP.md` | User/AI | Yes | Edit to clarify the project overview. |
-| `src/simpcode/core/prompts/` | SimpCode | No for project users | Internal framework prompts, not onboarding files. |
-| `.simp/wiki/` | SimpCode | No | Run `simp sync` to fix. |
-| `.simp/index.json`| SimpCode | No | Run `simp init` to fix. |
+Wiki pages, index, changes log, and registry.
 
----
+### `.simp/sessions/`
 
-## Best Practice: The "Rule of Thumb"
-If a file is inside the `.simp/` hidden directory, **do not touch it.** 
-If it is a `.md` file in your repository root (`SIMP.md`, `SPEC.md`), it is **yours to control**. If it lives under `.simp/`, it is managed by SimpCode.
+Serialized session states.
+
+### `.simp/plans/`
+
+Persisted plan artifacts.
+
+### `.simp/logs/`
+
+Execution traces.
+
+### `.simp/tokens.log`
+
+Token usage estimates.
+
+### `.simp/registry.json`
+
+Hash registry used by `HashRegistry` component.
+
+## 4. Configuration Ownership
+
+Config and history writable paths use global-first strategy:
+
+1. `~/.simpcode/`
+2. project-local `.simp/`
+
+This means not all runtime files are guaranteed to live only under `.simp/`.
+
+## 5. Git Considerations
+
+On onboarding skeleton path, SimpCode appends `.simp/` to `.gitignore` only if `.gitignore` already exists.
+
+If no `.gitignore` exists, you should add ignore rules manually based on your repository policy.
+
+## 6. Write Boundaries During Execution
+
+Writes are constrained by plan-approved targets.
+
+If execution attempts to write outside scope, it is blocked as plan violation.
+
+## 7. Suggested Team Policy
+
+- Keep `SIMP.md` and `SPEC.md` versioned.
+- Decide whether to version `.simp/wiki` based on workflow preference.
+- Avoid versioning volatile session/log artifacts unless required for audit.
+- Document your policy in repository contribution guidelines.

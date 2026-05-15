@@ -1,65 +1,91 @@
-# Deep Dive: Writing a Strong SPEC.md
+# Writing Rules and Prompting Guidance
 
-`SPEC.md` is the most powerful tool for ensuring SimpCode builds toward the project you actually want. While the Semantic Wiki provides context, `SPEC.md` provides **intent**.
+This guide explains how to write prompts and task requests that produce reliable SimpCode behavior.
 
----
+## 1. The Core Rule
 
-## Structure of an Effective SPEC.md
+Ambiguous scope creates weak plans.
 
-A good `SPEC.md` acts as a compact product and architecture contract. It should be written as a series of **clear requirements**.
+Precise scope creates reliable plans.
 
-### 1. General Principles
-Define the high-level philosophy of the codebase.
-> "We prefer functional programming patterns over deep class hierarchies. Avoid shared mutable state at all costs."
+## 2. Prompt Structure Template
 
-### 2. Implementation Rules
-Specific technical requirements that the AI must follow.
-> - "Always use `pydantic` for data validation in API endpoints."
-> - "Functions must not exceed 40 lines of code; refactor into sub-utilities if necessary."
-> - "Use `snake_case` for variables and `PascalCase` for classes."
+Use this shape for `/do` requests:
 
-### 3. Documentation Requirements
-Define how the AI should explain its work.
-> - "All public methods require a Google-style docstring."
-> - "Include complexity analysis (Time/Space) for all algorithms in `src/core/`."
+1. objective
+2. exact target files
+3. explicit exclusions
+4. verification command
+5. constraints (style, compatibility, performance)
 
----
+Example template:
 
-## Common Mistakes to Avoid
+"Implement <objective> in <target files>. Do not modify <excluded files>. Verify with <command>. Preserve <constraints>."
 
-### Being Too Vague
-*   *Bad*: "Make the code clean."
-*   *Good*: "Avoid nested if-statements. Use early returns and guard clauses."
+## 3. Examples of Strong Task Requests
 
-### Including Temporary Tasks
-`SPEC.md` is for **project-defining requirements**. For one-off tasks, put the requirement directly in the `simp do` command or update the relevant section of `SPEC.md` first.
-*   *Bad*: "Next update: rename all files to lowercase." (Put this in a `simp do` command instead).
+- "Add request payload validation in `src/api/handlers.py`, add tests in `tests/test_handlers.py`, do not change auth middleware, verify with `pytest tests/test_handlers.py -q`."
+- "Refactor `src/cache/service.py` to isolate eviction policy, update `tests/test_cache_service.py`, keep public API unchanged, verify with `pytest tests/test_cache_service.py -q`."
 
-### Conflicting with the Tech Stack
-Ensure your rules don't ask for a pattern that the current libraries don't support.
+## 4. Examples of Weak Task Requests
 
----
+- "Improve backend quality."
+- "Make this project cleaner."
+- "Fix auth completely."
 
-## Example SPEC.md for a FastAPI Project
+Weak prompts lack file scope and verification expectations.
 
-```markdown
-# Agent Instructions: SimpProject
+## 5. Writing Effective `/ask` Questions
 
-## Philosophy
-- Speed and safety are equal priorities.
-- Use Asynchronous code (`async/await`) for all I/O operations.
+Good `/ask` questions:
 
-## Patterns
-- Dependency Injection must be used for database sessions.
-- Use `JSONResponse` for all non-scalar API returns.
-- Schema definitions belong in `src/schemas/`, not in `src/models/`.
+- ask about architecture boundaries,
+- ask about risk areas and invariants,
+- ask for file-level orientation before `/do`.
 
-## Testing
-- No code is complete without a passing pytest in `tests/`.
-- Mock all external API calls using `httpx-mock`.
-```
+Examples:
 
----
+- "Where does request authorization currently happen, and what assumptions does it make?"
+- "Which modules are coupled to persistence layer decisions?"
 
-## How SimpCode Uses This
-For every turn of every mission, SimpCode reads `SPEC.md` and the semantic Wiki. The internal prompt layer then uses those requirements before the AI generates any code. If a generated snippet conflicts with the specification, the reasoning loop identifies the mismatch and regenerates the response.
+## 6. Recovery-Oriented Prompting
+
+When recovering from failure, mention failure context explicitly:
+
+- previous failing command,
+- exact error symptom,
+- desired non-breaking constraint.
+
+This improves planning quality for corrective tasks.
+
+## 7. Verification Guidance
+
+Always provide a verification command that can run in your environment.
+
+Preferred:
+
+- targeted unit/integration tests,
+- project lint/type checks for touched files.
+
+Avoid vague verification instructions such as "make sure it works".
+
+## 8. Scope Exclusion Guidance
+
+Explicitly state exclusion boundaries in task text:
+
+- "Do not modify migrations"
+- "Do not change public API signatures"
+- "Do not touch deployment config"
+
+This helps planner emit safer scope exclusions.
+
+## 9. Iteration Pattern for Difficult Tasks
+
+For complex work, split into phases:
+
+1. `/ask` architecture and dependency analysis
+2. `/do ... --dry-run` for planned phase 1
+3. `/do ...` phase 1 execution
+4. validate and repeat for phase 2
+
+This reduces risk compared to one broad task request.
